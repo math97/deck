@@ -63,6 +63,13 @@ type Model struct {
 	// Agentes vivos no herdr, por nome, e se estamos dentro de uma sessão.
 	agents      map[string]herdr.Agent
 	herdrInside bool
+
+	// Estado do artefato quando cada agente subiu, por nome de agente. É o que
+	// permite dizer se a entrega foi de fato gravada.
+	baselines map[string]baseline
+
+	// Baseline do disparo em voo, até o herdr confirmar o nome do agente.
+	pendingBaseline baseline
 }
 
 // Mensagens internas.
@@ -85,6 +92,7 @@ func New(b *board.Board) Model {
 
 		agents:      map[string]herdr.Agent{},
 		herdrInside: herdr.Inside(),
+		baselines:   map[string]baseline{},
 	}
 	m.syncErrors()
 	return m

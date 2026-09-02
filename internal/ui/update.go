@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -39,15 +41,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(pollGitHub(m.b.Cards), scheduleGitHubPoll())
 
 	case agentsMsg:
+		cmds := m.detectFinished(msg)
 		m.agents = msg
 		m.clampCursor()
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case agentTickMsg:
 		return m, tea.Batch(pollAgents(), scheduleAgentPoll())
 
 	case agentStartedMsg:
 		return m.agentStarted(msg)
+
+	case captureMsg:
+		return m.captured(msg)
 
 	case clearStatusMsg:
 		m.status = ""
@@ -385,6 +391,11 @@ func (m Model) startAgentForCard() (tea.Model, tea.Cmd) {
 		taken[name] = true
 	}
 
+	// O baseline tem que ser tirado antes de o agente rodar: depois, o arquivo
+	// que ele gravar já apareceria como pré-existente.
+	base := snapshotArtifact(card, col.Key)
+	m.pendingBaseline = base
+
 	m.setStatus(true, "subindo agente para %s…", card.Title)
 	return m, startAgent(m.b, card, col, taken)
 }
@@ -412,6 +423,12 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.linkAgent(card, msg.agent)
+	if m.pendingBaseline.path == "" {
+		m.pendingBaseline = snapshotArtifact(card, card.Column)
+	}
+	m.baselines[msg.agent.Name] = m.pendingBaseline
+	m.pendingBaseline = baseline{}
+
 	m.setStatus(true, "agente %s rodando em %s", msg.agent.Name, msg.agent.PaneID)
 	return m, tea.Batch(pollAgents(), clearStatusCmd())
 }
@@ -462,4 +479,124 @@ func (m *Model) columnTitle() string {
 		return col.Title
 	}
 	return "?"
+}
+
+// detectFinished compara o estado anterior com o novo e dispara a captura de
+// cada agente que acabou de terminar.
+//
+// A comparação é feita contra m.agents (o estado da rodada anterior) porque o
+// herdr reporta `done` de forma estável: sem isso, capturaríamos de novo a cada
+// 2 segundos enquanto o agente seguisse pronto.
+func (m *Model) detectFinished(next agentsMsg) []tea.Cmd {
+	var cmds []tea.Cmd
+
+	for name, now := range next {
+		prev, had := m.agents[name]
+		if !had {
+			continue
+		}
+
+		// Bloqueou agora: avisa, mas não captura — o agente não terminou.
+		if now.Status == herdr.StatusBlocked && prev.Status != herdr.StatusBlocked {
+			if card := m.cardForAgent(name); card != nil {
+				cmds = append(cmds, notify("deck: agente bloqueado", card.Title, "request"))
+			}
+			continue
+		}
+
+		if now.Status != herdr.StatusDone || prev.Status == herdr.StatusDone {
+			continue
+		}
+
+		card := m.cardForAgent(name)
+		if card == nil {
+			continue
+		}
+		base := m.baselines[name]
+		if base.path == "" {
+			// Agente iniciado antes deste processo do deck: sem baseline, o
+			// melhor que dá é considerar entregue se o artefato existir.
+			base = snapshotArtifact(card, card.Column)
+			base.exists = false
+		}
+		cmds = append(cmds, captureAgentResult(card, name, base))
+	}
+	return cmds
+}
+
+// cardForAgent encontra o card ligado a um nome de agente.
+func (m *Model) cardForAgent(name string) *board.Card {
+	for _, c := range m.b.Cards {
+		if c.Agent != nil && c.Agent.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+// captured registra no card o desfecho da rodada do agente.
+func (m Model) captured(msg captureMsg) (tea.Model, tea.Cmd) {
+	var card *board.Card
+	for _, c := range m.b.Cards {
+		if c.Path == msg.cardPath {
+			card = c
+			break
+		}
+	}
+	if card == nil {
+		return m, nil
+	}
+
+	var line, status string
+	switch {
+	case msg.delivered:
+		line = fmt.Sprintf("agente terminou · %s gravado (%s)",
+			shortName(msg.artifact), humanSize(msg.size))
+		status = card.Title + ": entrega gravada"
+
+	case msg.session != "":
+		line = fmt.Sprintf("agente terminou SEM gravar %s · transcrição em %s",
+			shortName(msg.artifact), shortName(msg.session))
+		status = card.Title + ": sem entrega, transcrição salva"
+
+	default:
+		line = "agente terminou sem gravar a entrega"
+		if msg.err != nil {
+			line += " · " + msg.err.Error()
+		}
+		status = card.Title + ": agente terminou sem entrega"
+	}
+
+	card.AppendLog("%s", line)
+	if err := card.Save(); err != nil {
+		m.setStatus(false, "salvando card: %v", err)
+		return m, clearStatusCmd()
+	}
+
+	m.reload()
+	m.setStatus(msg.delivered, "%s", status)
+	return m, tea.Batch(
+		notify("deck: agente terminou", status, "done"),
+		clearStatusCmd(),
+	)
+}
+
+// shortName encurta um caminho para o nome do arquivo, que é o que informa.
+func shortName(path string) string {
+	if i := strings.LastIndexByte(path, '/'); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
+// humanSize formata bytes de forma curta.
+func humanSize(n int64) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
 }

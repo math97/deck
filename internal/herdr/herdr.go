@@ -275,3 +275,16 @@ func (s Status) Badge() string {
 func (s Status) NeedsAttention() bool {
 	return s == StatusBlocked || s == StatusDone
 }
+
+// Notify mostra uma notificação na UI do herdr. Falha em silêncio: um aviso
+// que não apareceu nunca deve derrubar o fluxo que o gerou.
+func Notify(ctx context.Context, title, body, sound string) {
+	if sound == "" {
+		sound = "done"
+	}
+	args := []string{"notification", "show", title, "--sound", sound}
+	if body != "" {
+		args = append(args, "--body", body)
+	}
+	_ = run(ctx, nil, args...)
+}
