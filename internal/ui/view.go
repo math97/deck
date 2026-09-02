@@ -118,9 +118,26 @@ func (m Model) viewCard(card *board.Card, selected bool, width int) string {
 	}
 
 	title := wrap(card.Title, inner, 3)
-	meta := styleCardMeta.Render(relativeTime(card.Updated))
 
-	return style.Width(width - 2).Render(title + "\n" + meta)
+	// Linha de metadados: idade, marca de artefatos, badge do PR.
+	meta := relativeTime(card.Updated)
+	if n := len(card.Artifacts); n > 0 {
+		meta += fmt.Sprintf(" · %d📄", n)
+	}
+	line := styleCardMeta.Render(meta)
+
+	if st, ok := m.ghStates[card.Path]; ok {
+		badge := st.Badge()
+		if st.Healthy() {
+			line += " " + styleBadgeOK.Render(badge)
+		} else {
+			line += " " + styleBadgeBad.Render(badge)
+		}
+	} else if card.GitHubPR != "" {
+		line += " " + styleCardMeta.Render("PR…")
+	}
+
+	return style.Width(width - 2).Render(title + "\n" + line)
 }
 
 func (m Model) viewFooter() string {
@@ -146,7 +163,7 @@ func (m Model) viewFooter() string {
 	return styleStatus.Render("h/l colunas · j/k cards · H/L mover · n novo · e editar · p prompt · ? ajuda · q sair")
 }
 
-// viewDetail mostra o card inteiro. A renderização com glamour entra na fase 2.
+// viewDetail mostra o card e seus artefatos em abas.
 func (m Model) viewDetail() string {
 	card := m.currentCard()
 	if card == nil {
@@ -159,15 +176,59 @@ func (m Model) viewDetail() string {
 	}
 
 	head := styleColTitleFocus.Render(card.Title)
-	meta := styleCardMeta.Render(fmt.Sprintf(
-		"%s · atualizado %s · %s",
-		card.ID, relativeTime(card.Updated), card.Column,
-	))
 
-	content := strings.Join([]string{head, meta, "", strings.TrimSpace(card.Body)}, "\n")
+	metaParts := []string{card.ID, "atualizado " + relativeTime(card.Updated)}
+	if st, ok := m.ghStates[card.Path]; ok {
+		metaParts = append(metaParts, st.Detail())
+	}
+	meta := styleCardMeta.Render(strings.Join(metaParts, " · "))
+
+	// Barra de abas: o card e um artefato por coluna que já produziu algo.
+	arts := m.tabs(card)
+	labels := []string{"card"}
+	for _, a := range arts {
+		t := a.Title
+		if t == "" {
+			t = a.Column
+		}
+		labels = append(labels, t)
+	}
+	var tabBar []string
+	for i, l := range labels {
+		if i == m.tabIdx {
+			tabBar = append(tabBar, styleTabActive.Render(l))
+		} else {
+			tabBar = append(tabBar, styleTabIdle.Render(l))
+		}
+	}
+	tabs := strings.Join(tabBar, styleCardMeta.Render(" │ "))
+
+	// Corpo da aba ativa.
+	body := strings.TrimSpace(card.Body)
+	if m.tabIdx > 0 && m.tabIdx-1 < len(arts) {
+		content, err := arts[m.tabIdx-1].Read()
+		if err != nil {
+			body = "não foi possível ler o artefato: " + err.Error()
+		} else {
+			body = strings.TrimSpace(content)
+		}
+	}
+
+	// Limita a altura para o overlay não estourar a tela.
+	maxLines := m.height - 10
+	if maxLines < 5 {
+		maxLines = 5
+	}
+	lines := strings.Split(body, "\n")
+	if len(lines) > maxLines {
+		lines = append(lines[:maxLines], styleCardMeta.Render("… (e edita no $EDITOR)"))
+		body = strings.Join(lines, "\n")
+	}
+
+	content := strings.Join([]string{head, meta, "", tabs, "", body}, "\n")
 	box := styleOverlay.Width(width).Render(content)
 
-	hint := styleStatus.Render("esc fecha · e edita no $EDITOR")
+	hint := styleStatus.Render("tab abas · e edita · o abre o PR · esc fecha")
 	return lipgloss.JoinVertical(lipgloss.Left, box, hint)
 }
 
@@ -178,7 +239,9 @@ func (m Model) viewHelp() string {
 		{"g / G", "primeiro / último card"},
 		{"H / L", "mover card para a coluna vizinha"},
 		{"J / K", "reordenar card dentro da coluna"},
-		{"enter", "abrir o card"},
+		{"enter", "abrir o card (abas de artefato)"},
+		{"tab", "próxima aba, dentro do card aberto"},
+		{"o", "abrir o PR do card no browser"},
 		{"n", "novo card na coluna focada"},
 		{"e", "editar o card no $EDITOR"},
 		{"", ""},

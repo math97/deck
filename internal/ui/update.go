@@ -23,6 +23,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ghStatesMsg:
+		for path, st := range msg {
+			m.ghStates[path] = st
+		}
+		return m, nil
+
+	case ghTickMsg:
+		return m, tea.Batch(pollGitHub(m.b.Cards), scheduleGitHubPoll())
+
 	case clearStatusMsg:
 		m.status = ""
 		return m, nil
@@ -31,8 +40,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.mode {
 		case modeInput:
 			return m.updateInput(msg)
-		case modeDetail, modeHelp:
-			// Qualquer tecla fecha o overlay.
+		case modeDetail:
+			return m.updateDetail(msg)
+		case modeHelp:
 			switch msg.String() {
 			case "esc", "q", "enter", "?":
 				m.mode = modeNormal

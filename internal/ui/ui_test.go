@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/matheusalbuquerque/deck/internal/gh"
 )
 
 // newTestModel monta um board temporário e o modelo já dimensionado.
@@ -292,5 +293,102 @@ func TestReorderCardWithinColumn(t *testing.T) {
 	}
 	if m.currentCard().Title != first {
 		t.Error("o foco deveria seguir o card movido")
+	}
+}
+
+func TestDetailTabsCycleThroughArtifacts(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com esteira")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	if _, err := card.WriteArtifact("refine", "# refinamento\n\nas perguntas"); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	if _, err := card.WriteArtifact("qa", "# testes\n\no plano"); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	m.reload()
+
+	m = press(t, m, "enter") // abre o detalhe
+	if m.mode != modeDetail {
+		t.Fatal("enter deveria abrir o detalhe")
+	}
+	// Aba 0 é o card.
+	if !strings.Contains(m.View(), "Critério de aceite") {
+		t.Error("aba inicial deveria mostrar o corpo do card")
+	}
+
+	m = press(t, m, "tab")
+	if !strings.Contains(m.View(), "as perguntas") {
+		t.Errorf("segunda aba deveria mostrar o artefato de refine:\n%s", m.View())
+	}
+
+	m = press(t, m, "tab")
+	if !strings.Contains(m.View(), "o plano") {
+		t.Error("terceira aba deveria mostrar o artefato de qa")
+	}
+
+	// Circula de volta para o card.
+	m = press(t, m, "tab")
+	if m.tabIdx != 0 {
+		t.Errorf("tab deveria circular de volta ao card, tabIdx=%d", m.tabIdx)
+	}
+
+	m = press(t, m, "esc")
+	if m.mode != modeNormal || m.tabIdx != 0 {
+		t.Error("esc deveria fechar o detalhe e resetar a aba")
+	}
+}
+
+func TestCardShowsArtifactCount(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com artefatos")
+	m = press(t, m, "enter")
+
+	m.currentCard().WriteArtifact("refine", "x")
+	m.currentCard().WriteArtifact("qa", "y")
+	m.reload()
+
+	if !strings.Contains(m.View(), "2📄") {
+		t.Errorf("o card deveria indicar 2 artefatos:\n%s", m.View())
+	}
+}
+
+func TestGitHubBadgeRendersOnCard(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com PR")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.GitHubPR = "https://github.com/org/repo/pull/7"
+	card.Save()
+	m.reload()
+
+	// Antes do poller responder, mostra o placeholder.
+	if !strings.Contains(m.View(), "PR…") {
+		t.Errorf("card com PR deveria mostrar placeholder:\n%s", m.View())
+	}
+
+	// Com o estado carregado, mostra o badge.
+	m.ghStates[m.currentCard().Path] = gh.State{State: "OPEN", ChecksTotal: 3, ChecksPassing: 3}
+	if !strings.Contains(m.View(), "CI ok") {
+		t.Errorf("card deveria mostrar o badge do PR:\n%s", m.View())
+	}
+}
+
+func TestOpenPRWithoutLinkWarns(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "sem PR")
+	m = press(t, m, "enter")
+	m = press(t, m, "enter") // detalhe
+
+	m = press(t, m, "o")
+	if m.status == "" || m.statusOK {
+		t.Error("deveria avisar que o card não tem github_pr")
 	}
 }

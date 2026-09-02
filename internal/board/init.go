@@ -40,19 +40,27 @@ frontmatter intacto e preservando a seção ## Log.`,
 		key: "in-progress", title: "In Progress", order: 30, agentKind: "claude",
 		prompt: `Implemente a tarefa descrita em {{card_path}}.
 
-Trabalhe em {{cwd}}. Siga as convenções do código existente.
-Não altere o frontmatter do card nem a seção ## Log.
+Antes de escrever código, leia o refinamento que já foi feito neste card —
+ele está listado no rodapé deste prompt. Não refaça decisões já tomadas lá.
 
-Ao terminar, resuma em poucas linhas o que mudou e o que ficou de fora.`,
+Trabalhe em {{cwd}}. Siga as convenções do código existente.
+
+Grave um plano curto antes de executar: o que vai mudar, em quais arquivos, e
+o que fica de fora. Ao terminar, registre o que de fato mudou.`,
 	},
 	{
 		key: "qa", title: "QA", order: 40, agentKind: "claude",
-		prompt: `Valide a tarefa descrita em {{card_path}} contra o diff atual em {{cwd}}.
+		prompt: `Monte e execute o plano de testes da tarefa em {{card_path}}.
 
-Percorra cada critério de aceite do card e diga, para cada um, se passa ou
-falha — com a evidência concreta (arquivo, linha, saída de teste).
+Leia o refinamento e o registro da implementação — estão listados no rodapé
+deste prompt. O plano de testes sai de lá, não da sua imaginação.
 
-Reporte apenas o que falha ou o que ficou sem cobertura. Não conserte nada.`,
+Para cada critério de aceite do card, diga se passa ou falha, com evidência
+concreta: arquivo, linha, saída de teste. Se houver PR associado
+({{github_pr}}), considere os checks de CI como parte da evidência.
+
+Reporte o que falha e o que ficou sem cobertura. Não conserte nada — quem
+conserta é a coluna In Progress.`,
 	},
 	{
 		key: "done", title: "Done", order: 50,

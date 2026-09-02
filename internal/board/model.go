@@ -32,19 +32,50 @@ type AgentRef struct {
 	Kind string
 }
 
+// Artifact é a saída que um agente produziu numa coluna: o refinamento, o
+// plano, o resultado do QA. O nome do arquivo é a key da coluna que o gerou,
+// então a esteira se organiza sozinha, sem configuração.
+type Artifact struct {
+	Column string // key da coluna que produziu
+	Title  string // título da coluna, para exibição
+	Path   string
+}
+
 // Card é uma tarefa. O frontmatter guarda o estado; o corpo guarda o contexto
 // que você quer reler daqui a duas semanas.
+//
+// Um card mora num arquivo só (cards/<id>.md) até precisar acumular artefatos;
+// aí ele é promovido a diretório (cards/<id>/card.md + cards/<id>/<coluna>.md).
 type Card struct {
 	ID      string
-	Path    string
+	Path    string // sempre o markdown do card em si
+	Dir     string // vazio enquanto o card for de arquivo único
 	Title   string
 	Column  string
 	Order   int
 	Created time.Time
 	Updated time.Time
 	Agent   *AgentRef
-	Body    string
-	doc     *Doc
+
+	GitHubPR    string
+	GitHubIssue string
+
+	Artifacts []*Artifact
+	Body      string
+	doc       *Doc
+}
+
+// IsFolder informa se o card já foi promovido a diretório.
+func (c *Card) IsFolder() bool { return c.Dir != "" }
+
+// Artifact devolve o artefato de uma coluna, ou nil.
+func (c *Card) Artifact(columnKey string) *Artifact {
+	for _, a := range c.Artifacts {
+		if a.Column == columnKey {
+			return a
+		}
+	}
+	return nil
 }
 
 // Board é o estado carregado do disco.

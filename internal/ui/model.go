@@ -11,6 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/matheusalbuquerque/deck/internal/gh"
 )
 
 // mode determina quem consome as teclas.
@@ -50,6 +51,13 @@ type Model struct {
 
 	width  int
 	height int
+
+	// Estado do GitHub por caminho de card, preenchido pelo poller.
+	ghStates  map[string]gh.State
+	ghEnabled bool
+
+	// Aba ativa no detalhe do card: 0 é o card, 1+ são os artefatos.
+	tabIdx int
 }
 
 // Mensagens internas.
@@ -64,16 +72,22 @@ func New(b *board.Board) Model {
 	ti.CharLimit = 120
 
 	m := Model{
-		b:     b,
-		root:  b.Root,
-		input: ti,
+		b:         b,
+		root:      b.Root,
+		input:     ti,
+		ghStates:  map[string]gh.State{},
+		ghEnabled: gh.Available(),
 	}
 	m.syncErrors()
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(watchCmd(m.root), tea.EnterAltScreen)
+	cmds := []tea.Cmd{watchCmd(m.root), tea.EnterAltScreen}
+	if m.ghEnabled {
+		cmds = append(cmds, pollGitHub(m.b.Cards), scheduleGitHubPoll())
+	}
+	return tea.Batch(cmds...)
 }
 
 // --- acesso ao estado focado ---
