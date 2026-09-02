@@ -1554,3 +1554,32 @@ func TestTarefaPendenteMorreComOAgente(t *testing.T) {
 		t.Error("pendência de agente morto deveria ser descartada")
 	}
 }
+
+// TestSoAbreHttpNoNavegador: a URL vem do frontmatter, e o `open` do macOS
+// abre qualquer esquema registrado — inclusive file: e esquemas de aplicativo.
+func TestSoAbreHttpNoNavegador(t *testing.T) {
+	bons := []string{
+		"https://github.com/cli/cli/pull/1",
+		"http://exemplo.test/x",
+	}
+	for _, u := range bons {
+		if !safeToOpen(u) {
+			t.Errorf("%q deveria ser aberta", u)
+		}
+	}
+
+	ruins := []string{
+		"file:///Applications/Calculadora.app",
+		"x-apple-script://qualquer",
+		"javascript:alert(1)",
+		"-a /Applications/Terminal.app",
+		"https://",
+		"",
+		"   ",
+	}
+	for _, u := range ruins {
+		if safeToOpen(u) {
+			t.Errorf("%q não deveria ser aberta", u)
+		}
+	}
+}
