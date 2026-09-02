@@ -11,6 +11,7 @@ agentes via [herdr](https://herdr.dev).
 
 | arquivo | o que traz |
 |---|---|
+| [`HANDOFF.md`](HANDOFF.md) | o que falta, priorizado, e o que nunca foi validado |
 | [`CLAUDE.md`](CLAUDE.md) | arquitetura, comandos, princípios do projeto |
 | [`docs/go-patterns.md`](docs/go-patterns.md) | padrões de Go com exemplos daqui |
 | [`README.md`](README.md) | o que o app faz, do ponto de vista de quem usa |

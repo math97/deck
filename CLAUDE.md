@@ -137,6 +137,8 @@ Identificadores em inglês.
 
 ## Estado atual
 
-Funcional e coberto por teste. **Mas o caminho de agentes e o de PR nunca
-rodaram de verdade** — foram escritos contra `herdr api schema` e testes, sem um
+Backlog priorizado e riscos conhecidos: [`HANDOFF.md`](HANDOFF.md).
+
+Funcional e coberto por teste. **Mas o caminho de agentes e o de escrita no PR
+nunca rodaram de verdade** — foram escritos contra `herdr api schema` e testes, sem um
 herdr vivo nem um PR real. Espere ajustes ao exercitar `s`, `f`, `c` e `R`.
