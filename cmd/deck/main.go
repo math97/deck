@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -28,41 +29,43 @@ o board vive em .deck/
 `
 
 func main() {
-	if err := run(); err != nil {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "deck:", err)
+		os.Exit(1)
+	}
+	if err := run(os.Args[1:], cwd, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "deck:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+// run despacha um subcomando. Recebe o diretório de partida e a saída em vez
+// de usar os globais, para poder ser exercitado em teste.
+func run(args []string, cwd string, out io.Writer) error {
 	cmd := ""
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if len(args) > 0 {
+		cmd = args[0]
 	}
 
 	switch cmd {
 	case "":
-		return runBoard()
+		return runBoard(cwd)
 	case "init":
-		return runInit()
+		return runInit(cwd, out)
 	case "ls":
-		return runList()
+		return runList(cwd, out)
 	case "prompt":
-		return runPrompt(os.Args[2:])
+		return runPrompt(args[1:], cwd, out)
 	case "help", "-h", "--help":
-		fmt.Print(usage)
+		fmt.Fprint(out, usage)
 		return nil
 	default:
 		return fmt.Errorf("comando desconhecido %q (veja `deck help`)", cmd)
 	}
 }
 
-func runInit() error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
+func runInit(cwd string, out io.Writer) error {
 	root, created, err := board.Init(cwd)
 	if err != nil {
 		return err
@@ -70,23 +73,19 @@ func runInit() error {
 
 	rel, _ := filepath.Rel(cwd, root)
 	if len(created) == 0 {
-		fmt.Printf("%s já existe — nada a criar\n", rel)
+		fmt.Fprintf(out, "%s já existe — nada a criar\n", rel)
 		return nil
 	}
-	fmt.Printf("board criado em %s\n", rel)
+	fmt.Fprintf(out, "board criado em %s\n", rel)
 	for _, c := range created {
-		fmt.Printf("  %s\n", c)
+		fmt.Fprintf(out, "  %s\n", c)
 	}
-	fmt.Println("\nrode `deck` para abrir.")
+	fmt.Fprintln(out, "\nrode `deck` para abrir.")
 	return nil
 }
 
 // load encontra e carrega o board a partir do diretório atual.
-func load() (*board.Board, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
+func load(cwd string) (*board.Board, error) {
 	root, err := board.Find(cwd)
 	if err != nil {
 		return nil, err
@@ -94,8 +93,8 @@ func load() (*board.Board, error) {
 	return board.Load(root)
 }
 
-func runBoard() error {
-	b, err := load()
+func runBoard(cwd string) error {
+	b, err := load(cwd)
 	if err != nil {
 		return err
 	}
@@ -106,21 +105,21 @@ func runBoard() error {
 
 // runList imprime o board em texto puro — útil para conferir de dentro de um
 // script ou de um agente, sem subir o TUI.
-func runList() error {
-	b, err := load()
+func runList(cwd string, out io.Writer) error {
+	b, err := load(cwd)
 	if err != nil {
 		return err
 	}
 
 	for _, col := range b.Columns {
 		cards := b.CardsIn(col.Key)
-		fmt.Printf("\n%s (%d)\n", col.Title, len(cards))
+		fmt.Fprintf(out, "\n%s (%d)\n", col.Title, len(cards))
 		if len(cards) == 0 {
-			fmt.Println("  —")
+			fmt.Fprintln(out, "  —")
 			continue
 		}
 		for _, c := range cards {
-			fmt.Printf("  %s  %s\n", c.ID, c.Title)
+			fmt.Fprintf(out, "  %s  %s\n", c.ID, c.Title)
 		}
 	}
 
@@ -133,13 +132,13 @@ func runList() error {
 // runPrompt renderiza o prompt da coluna em que o card está, com as variáveis
 // substituídas. É a ponte entre o board e um agente antes de a integração com
 // o herdr existir: `deck prompt <card> | claude -p`.
-func runPrompt(args []string) error {
+func runPrompt(args []string, cwd string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("uso: deck prompt <card-id>")
 	}
 	id := args[0]
 
-	b, err := load()
+	b, err := load(cwd)
 	if err != nil {
 		return err
 	}
@@ -163,15 +162,10 @@ func runPrompt(args []string) error {
 		return fmt.Errorf("a coluna %s não tem prompt — nada a disparar aqui", col.Title)
 	}
 
-	cwd, err := os.Getwd()
+	text, err := b.RenderPrompt(card, col, cwd)
 	if err != nil {
 		return err
 	}
-
-	out, err := b.RenderPrompt(card, col, cwd)
-	if err != nil {
-		return err
-	}
-	fmt.Println(out)
+	fmt.Fprintln(out, text)
 	return nil
 }

@@ -22,7 +22,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fsEventMsg:
 		// Alguém editou um arquivo por fora — inclusive um agente.
 		m.reload()
-		return m, watchCmd(m.root)
+		return m, watchCmd(m.fsEvents)
 
 	case editorDoneMsg:
 		m.reload()

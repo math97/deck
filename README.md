@@ -277,9 +277,15 @@ No detalhe do card, `j`/`k` rolam o corpo e `g` volta ao topo.
 
 ## Estado
 
-As quatro fases estão concluídas: board navegável, colunas e prompts editáveis,
-cards com log automático, artefatos por coluna, badges de PR, disparo e
-acompanhamento de agentes, e captura do desfecho de volta no card.
+Funcional e testado: board navegável com rolagem, colunas e prompts editáveis,
+cards com log automático e arquivamento, artefatos por coluna, busca, badges de
+PR, publicação de review, disparo/acompanhamento/liberação de agentes, e captura
+do desfecho de volta no card.
 
-Ideias para depois: renderização com glamour, busca, checkboxes marcáveis no
-TUI, e Jira como terceira fonte ao lado do GitHub.
+**Nunca rodou contra um herdr vivo nem contra um PR real.** Todo o caminho de
+agentes foi escrito a partir de `herdr api schema` e coberto por teste, mas o
+split, o start, o prompt, a captura e a publicação no PR ainda não foram
+exercitados de verdade. Espere ajustes.
+
+Ideias para depois: renderização com glamour, checkboxes marcáveis no TUI,
+`deck new` na linha de comando, e Jira como terceira fonte ao lado do GitHub.

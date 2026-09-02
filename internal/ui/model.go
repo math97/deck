@@ -89,6 +89,9 @@ type Model struct {
 
 	// Filtro de busca. Vazio mostra tudo.
 	filter string
+
+	// Avisos do observador de filesystem.
+	fsEvents chan struct{}
 }
 
 // Mensagens internas.
@@ -118,12 +121,13 @@ func New(b *board.Board) Model {
 	}
 	m.ghEnabled = cfg.GitHub.Enabled(gh.Available())
 	m.herdrInside = cfg.Herdr.Enabled(herdr.Inside())
+	m.fsEvents = startWatcher(b.Root)
 	m.syncErrors()
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{watchCmd(m.root), tea.EnterAltScreen}
+	cmds := []tea.Cmd{watchCmd(m.fsEvents), tea.EnterAltScreen}
 	if m.ghEnabled {
 		cmds = append(cmds, pollGitHub(m.b.Cards), scheduleGitHubPoll())
 	}
@@ -296,33 +300,73 @@ func (m *Model) reload() {
 
 // --- comandos ---
 
-// watchCmd instala o watcher de filesystem e devolve o primeiro evento.
-func watchCmd(root string) tea.Cmd {
-	return func() tea.Msg {
-		w, err := fsnotify.NewWatcher()
-		if err != nil {
-			return nil
-		}
-		w.Add(root)
-		w.Add(root + "/columns")
-		w.Add(root + "/cards")
+// startWatcher liga um observador de filesystem que vive enquanto o board
+// viver, e devolve o canal por onde os avisos chegam.
+//
+// A versão anterior criava e fechava um fsnotify a cada evento, o que deixava
+// uma janela cega entre o fechamento e a recriação: uma edição nesse intervalo
+// era perdida em silêncio. Aqui o observador é único e uma goroutine faz o
+// debounce, então nada escapa.
+func startWatcher(root string) chan struct{} {
+	out := make(chan struct{}, 1)
 
-		// Espera um evento e debounce: um save do editor gera vários.
-		for range w.Events {
-			timer := time.NewTimer(120 * time.Millisecond)
-		drain:
-			for {
-				select {
-				case <-w.Events:
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		close(out)
+		return out
+	}
+	for _, dir := range []string{root, root + "/columns", root + "/cards"} {
+		_ = w.Add(dir)
+	}
+
+	go func() {
+		defer w.Close()
+		var timer *time.Timer
+		var fire <-chan time.Time
+
+		for {
+			select {
+			case _, ok := <-w.Events:
+				if !ok {
+					return
+				}
+				// Um save do editor gera vários eventos; espera a poeira baixar.
+				if timer == nil {
+					timer = time.NewTimer(120 * time.Millisecond)
+				} else {
 					timer.Reset(120 * time.Millisecond)
-				case <-timer.C:
-					break drain
+				}
+				fire = timer.C
+
+			case <-fire:
+				fire = nil
+				// Não bloqueia: se já há um aviso pendente, este é redundante.
+				select {
+				case out <- struct{}{}:
+				default:
+				}
+
+			case _, ok := <-w.Errors:
+				if !ok {
+					return
 				}
 			}
-			w.Close()
-			return fsEventMsg{}
 		}
+	}()
+
+	return out
+}
+
+// watchCmd espera o próximo aviso do observador.
+func watchCmd(events chan struct{}) tea.Cmd {
+	if events == nil {
 		return nil
+	}
+	return func() tea.Msg {
+		if _, ok := <-events; !ok {
+			return nil
+		}
+		return fsEventMsg{}
 	}
 }
 
