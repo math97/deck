@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -40,6 +41,8 @@ const (
 	inputNewCard inputKind = iota
 	inputNewColumn
 	inputRenameColumn
+	inputGitHubPR
+	inputFilter
 )
 
 // Model é o estado da aplicação.
@@ -83,6 +86,9 @@ type Model struct {
 
 	// Rolagem do corpo no detalhe do card.
 	detailOffset int
+
+	// Filtro de busca. Vazio mostra tudo.
+	filter string
 }
 
 // Mensagens internas.
@@ -154,6 +160,18 @@ func (m *Model) currentCards() []*board.Card {
 // selecionado deixaria de ser o card desenhado.
 func (m *Model) cardsIn(key string) []*board.Card {
 	cards := m.b.CardsIn(key)
+
+	if m.filter != "" {
+		needle := strings.ToLower(m.filter)
+		var kept []*board.Card
+		for _, c := range cards {
+			if matchesCard(c, needle) {
+				kept = append(kept, c)
+			}
+		}
+		cards = kept
+	}
+
 	if len(m.agents) == 0 {
 		return cards
 	}
@@ -174,6 +192,15 @@ func (m *Model) cardsIn(key string) []*board.Card {
 		return cards
 	}
 	return append(urgent, rest...)
+}
+
+// matchesCard procura o termo no título, no id e no corpo do card. O corpo
+// entra de propósito: quase sempre você lembra de um detalhe do contexto, não
+// do título exato que deu à tarefa.
+func matchesCard(c *board.Card, needle string) bool {
+	return strings.Contains(strings.ToLower(c.Title), needle) ||
+		strings.Contains(strings.ToLower(c.ID), needle) ||
+		strings.Contains(strings.ToLower(c.Body), needle)
 }
 
 // agentFor devolve o agente vivo ligado ao card, se houver.

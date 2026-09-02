@@ -58,6 +58,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reviewPostedMsg:
 		return m.reviewPosted(msg)
 
+	case agentReleasedMsg:
+		return m.agentReleased(msg)
+
 	case clearStatusMsg:
 		m.status = ""
 		return m, nil
@@ -144,6 +147,40 @@ func (m Model) commitInput(value string) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.setStatus(true, "coluna criada: %s", col.Title)
+		return m, clearStatusCmd()
+
+	case inputGitHubPR:
+		card := m.currentCard()
+		if card == nil {
+			return m, nil
+		}
+		value = strings.TrimSpace(value)
+		card.GitHubPR = value
+		if err := card.Save(); err != nil {
+			m.setStatus(false, "%v", err)
+			return m, clearStatusCmd()
+		}
+		m.reload()
+		if value == "" {
+			m.setStatus(true, "link do PR removido")
+			return m, clearStatusCmd()
+		}
+		m.setStatus(true, "PR %s ligado ao card", shortPR(value))
+		// Consulta o estado do PR agora, sem esperar o próximo ciclo.
+		if m.ghEnabled {
+			return m, tea.Batch(pollGitHub(m.b.Cards), clearStatusCmd())
+		}
+		return m, clearStatusCmd()
+
+	case inputFilter:
+		m.filter = strings.TrimSpace(value)
+		m.cardIdx = 0
+		m.clampCursor()
+		if m.filter == "" {
+			m.setStatus(true, "filtro limpo")
+		} else {
+			m.setStatus(true, "filtrando por %q — esc limpa", m.filter)
+		}
 		return m, clearStatusCmd()
 
 	case inputRenameColumn:
@@ -252,6 +289,41 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "d":
 		return m.askArchiveCard()
+
+	case "u":
+		card := m.currentCard()
+		if card == nil {
+			m.setStatus(false, "nenhum card selecionado")
+			return m, clearStatusCmd()
+		}
+		m.inputKind = inputGitHubPR
+		m.mode = modeInput
+		m.input.Placeholder = "https://github.com/org/repo/pull/123"
+		m.input.SetValue(card.GitHubPR)
+		m.input.CursorEnd()
+		m.input.Focus()
+		return m, nil
+
+	case "/":
+		m.inputKind = inputFilter
+		m.mode = modeInput
+		m.input.Placeholder = "buscar em título, id e corpo"
+		m.input.SetValue(m.filter)
+		m.input.CursorEnd()
+		m.input.Focus()
+		return m, nil
+
+	case "esc":
+		if m.filter != "" {
+			m.filter = ""
+			m.clampCursor()
+			m.setStatus(true, "filtro limpo")
+			return m, clearStatusCmd()
+		}
+		return m, nil
+
+	case "c":
+		return m.askReleaseAgent()
 
 	// --- colunas ---
 	case "p":
@@ -664,4 +736,74 @@ func (m Model) askArchiveCard() (tea.Model, tea.Cmd) {
 		},
 	}
 	return m, nil
+}
+
+// askReleaseAgent fecha o pane do agente ligado ao card.
+//
+// Sem isso, um card que passou por Refine, In Progress e QA deixa panes vivos
+// para sempre. Fecha só panes que o próprio deck criou, e com confirmação:
+// fechar um pane mata o processo dentro dele.
+func (m Model) askReleaseAgent() (tea.Model, tea.Cmd) {
+	card := m.currentCard()
+	if card == nil || card.Agent == nil {
+		m.setStatus(false, "este card não tem agente")
+		return m, clearStatusCmd()
+	}
+	if !m.herdrInside {
+		m.setStatus(false, "fora de uma sessão do herdr")
+		return m, clearStatusCmd()
+	}
+
+	agent := *card.Agent
+	warn := ""
+	if a, ok := m.agentFor(card); ok && a.Status == herdr.StatusWorking {
+		warn = " — ELE AINDA ESTÁ TRABALHANDO"
+	}
+
+	m.mode = modeConfirm
+	m.confirm = confirmState{
+		question: "Fechar o pane do agente?" + warn,
+		detail:   agent.Name + " · " + agent.Pane,
+		action: func(mm Model) (tea.Model, tea.Cmd) {
+			return mm, releaseAgent(card, agent)
+		},
+	}
+	return m, nil
+}
+
+// releaseAgent fecha o pane e desliga a referência no card.
+func releaseAgent(card *board.Card, agent board.AgentRef) tea.Cmd {
+	cardPath := card.Path
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := herdr.PaneClose(ctx, agent.Pane)
+		return agentReleasedMsg{cardPath: cardPath, name: agent.Name, err: err}
+	}
+}
+
+// agentReleased limpa a ligação no card depois de fechar o pane.
+func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.setStatus(false, "%v", msg.err)
+		return m, clearStatusCmd()
+	}
+
+	for _, c := range m.b.Cards {
+		if c.Path == msg.cardPath {
+			c.Agent = nil
+			c.AppendLog("agente `%s` liberado", msg.name)
+			if err := c.Save(); err != nil {
+				m.setStatus(false, "salvando card: %v", err)
+				return m, clearStatusCmd()
+			}
+			break
+		}
+	}
+	delete(m.agents, msg.name)
+	delete(m.baselines, msg.name)
+
+	m.reload()
+	m.setStatus(true, "agente %s liberado", msg.name)
+	return m, clearStatusCmd()
 }

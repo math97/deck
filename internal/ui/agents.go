@@ -21,6 +21,13 @@ type agentsMsg map[string]herdr.Agent
 // agentTickMsg agenda a próxima rodada do poller.
 type agentTickMsg struct{}
 
+// agentReleasedMsg é o resultado de fechar o pane de um agente.
+type agentReleasedMsg struct {
+	cardPath string
+	name     string
+	err      error
+}
+
 // agentStartedMsg é o resultado de disparar um agente para um card.
 type agentStartedMsg struct {
 	cardPath string

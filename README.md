@@ -237,6 +237,9 @@ precisar estar olhando o board.
 | `r` | renomear a coluna focada |
 | `<` `>` | reordenar a coluna |
 | `d` | arquivar o card (pede confirmação) |
+| `u` | colar o link do PR no card |
+| `/` | buscar em título, id e corpo; `esc` limpa |
+| `c` | fechar o pane do agente (pede confirmação) |
 | `x` | remover a coluna (só se estiver vazia) |
 | `?` | ajuda |
 | `q` | sair |
