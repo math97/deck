@@ -1487,3 +1487,70 @@ func TestUnknownAgentKindBecomesBoardWarning(t *testing.T) {
 		}
 	}
 }
+
+// TestAgenteBloqueadoNoStartFicaLigadoAoCard cobre o agente que sobe parado
+// numa pergunta: ele é do card mesmo assim, senão vira um processo vivo que
+// ninguém consegue focar nem fechar.
+func TestAgenteBloqueadoNoStartFicaLigadoAoCard(t *testing.T) {
+	m := newTestModel(t)
+	card, err := m.b.NewCard("tarefa qualquer", "todo")
+	if err != nil {
+		t.Fatalf("NewCard: %v", err)
+	}
+
+	next, _ := m.Update(agentStartedMsg{
+		cardPath: card.Path,
+		agent:    &herdr.Agent{Name: "card-x", PaneID: "w9:p1", Status: herdr.StatusBlocked},
+		kind:     "claude",
+		pending:  "a tarefa",
+	})
+	m = next.(Model)
+
+	if card.Agent == nil || card.Agent.Name != "card-x" {
+		t.Fatal("agente bloqueado deveria ficar ligado ao card")
+	}
+	if m.pendingPrompts["card-x"] != "a tarefa" {
+		t.Errorf("tarefa deveria ficar pendente: %v", m.pendingPrompts)
+	}
+	if !strings.Contains(plain(m.View()), "esperando resposta") {
+		t.Error("o board deveria dizer que o agente espera resposta")
+	}
+}
+
+// TestTarefaPendenteSoSaiQuandoOAgenteLibera: entregar cedo perde o prompt,
+// porque o herdr recusa com agent_blocked.
+func TestTarefaPendenteSoSaiQuandoOAgenteLibera(t *testing.T) {
+	m := newTestModel(t)
+	m.pendingPrompts["card-x"] = "a tarefa"
+
+	m.agents = agentsMsg{"card-x": {Name: "card-x", Status: herdr.StatusBlocked}}
+	if cmds := m.deliverPending(agentsMsg{
+		"card-x": {Name: "card-x", Status: herdr.StatusBlocked},
+	}); len(cmds) != 0 {
+		t.Error("agente ainda bloqueado não deveria receber a tarefa")
+	}
+	if len(m.pendingPrompts) != 1 {
+		t.Error("a tarefa deveria continuar pendente")
+	}
+
+	cmds := m.deliverPending(agentsMsg{"card-x": {Name: "card-x", Status: herdr.StatusIdle}})
+	if len(cmds) != 1 {
+		t.Fatalf("agente liberado deveria receber a tarefa: %d comandos", len(cmds))
+	}
+	if len(m.pendingPrompts) != 0 {
+		t.Error("tarefa entregue não deveria seguir pendente")
+	}
+}
+
+// TestTarefaPendenteMorreComOAgente: agente que sumiu não tem o que receber.
+func TestTarefaPendenteMorreComOAgente(t *testing.T) {
+	m := newTestModel(t)
+	m.pendingPrompts["card-x"] = "a tarefa"
+
+	if cmds := m.deliverPending(agentsMsg{}); len(cmds) != 0 {
+		t.Error("agente morto não deveria receber tarefa")
+	}
+	if len(m.pendingPrompts) != 0 {
+		t.Error("pendência de agente morto deveria ser descartada")
+	}
+}

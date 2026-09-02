@@ -84,6 +84,10 @@ type Model struct {
 	// Baseline do disparo em voo, até o herdr confirmar o nome do agente.
 	pendingBaseline baseline
 
+	// Tarefas que um agente ainda não pôde receber por ter subido parado numa
+	// pergunta, por nome de agente. O poller entrega quando ele libera.
+	pendingPrompts map[string]string
+
 	confirm confirmState
 
 	// Rolagem do corpo no detalhe do card.
@@ -108,12 +112,13 @@ func New(b *board.Board) Model {
 	ti.CharLimit = 120
 
 	m := Model{
-		b:         b,
-		root:      b.Root,
-		input:     ti,
-		ghStates:  map[string]gh.State{},
-		agents:    map[string]herdr.Agent{},
-		baselines: map[string]baseline{},
+		b:              b,
+		root:           b.Root,
+		input:          ti,
+		ghStates:       map[string]gh.State{},
+		agents:         map[string]herdr.Agent{},
+		baselines:      map[string]baseline{},
+		pendingPrompts: map[string]string{},
 	}
 
 	// A config decide o que está ligado; "auto" cai na disponibilidade real.

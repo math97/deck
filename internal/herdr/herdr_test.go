@@ -1,6 +1,7 @@
 package herdr
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 )
@@ -109,5 +110,22 @@ func TestUnknownKindsWithoutHerdr(t *testing.T) {
 func TestUnknownKindsIgnoresEmpty(t *testing.T) {
 	if got := UnknownKinds(nil); len(got) != 0 {
 		t.Errorf("lista vazia não tem desconhecidos: %v", got)
+	}
+}
+
+func TestCodeSoValeParaErroDoHerdr(t *testing.T) {
+	err := &Error{Op: "agent", Code: CodeAgentNotReady, Message: "blocked during startup"}
+	if got := Code(err); got != CodeAgentNotReady {
+		t.Errorf("código = %q, queria %q", got, CodeAgentNotReady)
+	}
+	if got := Code(errors.New("timeout")); got != "" {
+		t.Errorf("erro de fora do herdr não tem código: %q", got)
+	}
+	if got := Code(nil); got != "" {
+		t.Errorf("nil não tem código: %q", got)
+	}
+	// A mensagem ao usuário continua legível, com o subcomando na frente.
+	if got := err.Error(); got != "herdr agent: blocked during startup" {
+		t.Errorf("mensagem = %q", got)
 	}
 }
