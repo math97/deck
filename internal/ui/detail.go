@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"fmt"
+	"net/url"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -133,9 +136,29 @@ func (m Model) openPR(card *board.Card) (tea.Model, tea.Cmd) {
 type focusFailedMsg struct{ err error }
 type browserFailedMsg struct{ err error }
 
+// safeToOpen aceita só http e https.
+//
+// A URL vem do frontmatter do card, que é texto que o usuário — ou uma
+// importação — colocou lá. O `open` do macOS abre qualquer esquema registrado,
+// inclusive `file:` e esquemas de aplicativo, então entregar a ele uma string
+// arbitrária transforma um campo de texto num disparador de programa. Um valor
+// começando com `-` também precisa cair fora: viraria flag do `open`.
+func safeToOpen(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || strings.HasPrefix(raw, "-") {
+		return false
+	}
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
 // openBrowser abre uma URL no navegador padrão do sistema.
-func openBrowser(url string) tea.Cmd {
+func openBrowser(rawURL string) tea.Cmd {
 	return func() tea.Msg {
+		if !safeToOpen(rawURL) {
+			return browserFailedMsg{err: fmt.Errorf("URL não é http(s): %q", rawURL)}
+		}
+		url := rawURL
+
 		var cmd *exec.Cmd
 		switch runtime.GOOS {
 		case "darwin":

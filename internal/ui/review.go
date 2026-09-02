@@ -84,7 +84,11 @@ func (m Model) askPostReview() (tea.Model, tea.Cmd) {
 	m.mode = modeConfirm
 	m.confirm = confirmState{
 		question: fmt.Sprintf("Publicar o review no PR? (%s)", shortPR(card.GitHubPR)),
-		detail:   fmt.Sprintf("%s · %s", card.Title, shortName(artifact.Path)),
+		// O aviso é sobre o que sai daqui, não sobre o que entra: o artefato
+		// vai inteiro para um PR que pode ser público e não dá para despublicar.
+		// Quem escreveu o review foi um agente, então nem sempre foi lido.
+		detail: fmt.Sprintf("%s · %s · vai inteiro e público, sem desfazer",
+			card.Title, shortName(artifact.Path)),
 		action: func(mm Model) (tea.Model, tea.Cmd) {
 			mm.setStatus(true, "publicando review…")
 			return mm, postReview(card, artifact.Path)
