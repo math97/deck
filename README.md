@@ -18,7 +18,14 @@ go build -o ~/.local/bin/deck ./cmd/deck
 deck init            # cria .deck/ com as cinco colunas padrão
 deck                 # abre o board
 deck ls              # lista os cards em texto puro, sem TUI
+deck new "<título>"  # cria um card (--column <key> escolhe a coluna)
 deck prompt <card>   # imprime o prompt da coluna atual, já renderizado
+```
+
+`deck new` imprime só o id, para encadear em script:
+
+```sh
+deck prompt "$(deck new 'Corrigir login' --column refine)" | claude -p
 ```
 
 `deck prompt` é a ponte com um agente antes da integração com o herdr:
@@ -99,6 +106,9 @@ updated: 2026-09-01T14:20:00-03:00
 ## Log
 - 2026-09-01 14:02 · To Do → Refine
 ```
+
+O corpo é renderizado com `glamour` no detalhe, e os itens de checklist ganham
+número: `1`-`9` marcam e desmarcam direto no TUI, gravando no markdown.
 
 A seção `## Log` é escrita automaticamente a cada transição. É o que faz um card
 parado há duas semanas voltar a fazer sentido quando você o reabre.
@@ -226,6 +236,7 @@ precisar estar olhando o board.
 | `J` `K` | reordenar o card dentro da coluna |
 | `enter` | abrir o card (abas: card + um artefato por coluna) |
 | `tab` | próxima aba no detalhe do card |
+| `1`-`9` | marcar/desmarcar critério de aceite (aba do card) |
 | `o` | abrir o PR do card no browser |
 | `s` | subir um agente com o prompt da coluna |
 | `f` | pular para o pane do agente |
@@ -287,5 +298,4 @@ agentes foi escrito a partir de `herdr api schema` e coberto por teste, mas o
 split, o start, o prompt, a captura e a publicação no PR ainda não foram
 exercitados de verdade. Espere ajustes.
 
-Ideias para depois: renderização com glamour, checkboxes marcáveis no TUI,
-`deck new` na linha de comando, e Jira como terceira fonte ao lado do GitHub.
+Ideias para depois: Jira como terceira fonte ao lado do GitHub.

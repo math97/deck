@@ -297,16 +297,20 @@ func (m Model) viewDetail() string {
 	}
 	tabs := strings.Join(tabBar, styleCardMeta.Render(" │ "))
 
-	// Corpo da aba ativa.
-	body := strings.TrimSpace(card.Body)
+	// Corpo da aba ativa, renderizado como markdown.
+	raw := strings.TrimSpace(card.Body)
 	if m.tabIdx > 0 && m.tabIdx-1 < len(arts) {
 		content, err := arts[m.tabIdx-1].Read()
 		if err != nil {
-			body = "não foi possível ler o artefato: " + err.Error()
+			raw = "não foi possível ler o artefato: " + err.Error()
 		} else {
-			body = strings.TrimSpace(content)
+			raw = strings.TrimSpace(content)
 		}
+	} else {
+		// Só na aba do card os itens ganham número: são eles que se marcam.
+		raw = board.NumberCheckboxes(raw)
 	}
+	body := renderMarkdown(raw, width-4)
 
 	// Janela rolável: j/k andam, e o rodapé diz onde você está.
 	maxLines := m.height - 10
@@ -331,7 +335,11 @@ func (m Model) viewDetail() string {
 	content := strings.Join([]string{head, meta, "", tabs, "", body}, "\n")
 	box := styleOverlay.Width(width).Render(content)
 
-	hint := styleStatus.Render("tab abas · j/k rola · e edita · o abre o PR · esc fecha" + scrollInfo)
+	hintText := "tab abas · j/k rola · e edita · o abre o PR · esc fecha"
+	if m.tabIdx == 0 && len(card.Checkboxes()) > 0 {
+		hintText = "1-9 marca item · " + hintText
+	}
+	hint := styleStatus.Render(hintText + scrollInfo)
 	return lipgloss.JoinVertical(lipgloss.Left, box, hint)
 }
 

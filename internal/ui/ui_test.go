@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -29,6 +30,14 @@ func newTestModel(t *testing.T) Model {
 	m.width, m.height = 160, 40
 	return m
 }
+
+// ansiSeq casa as sequências de escape que o glamour emite.
+var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// plain devolve o texto sem estilo. O glamour intercala códigos ANSI entre as
+// palavras — inclusive nos espaços —, então comparar conteúdo com a saída crua
+// falha mesmo quando o texto está lá.
+func plain(s string) string { return ansiSeq.ReplaceAllString(s, "") }
 
 // press envia uma sequência de teclas ao modelo.
 func press(t *testing.T, m Model, keys ...string) Model {
@@ -250,7 +259,7 @@ func TestDetailOverlayShowsBody(t *testing.T) {
 	if m.mode != modeDetail {
 		t.Fatal("enter deveria abrir o detalhe do card")
 	}
-	out := m.View()
+	out := plain(m.View())
 	if !strings.Contains(out, "Investigar timeout") {
 		t.Error("detalhe deveria mostrar o título")
 	}
@@ -319,17 +328,17 @@ func TestDetailTabsCycleThroughArtifacts(t *testing.T) {
 		t.Fatal("enter deveria abrir o detalhe")
 	}
 	// Aba 0 é o card.
-	if !strings.Contains(m.View(), "Critério de aceite") {
+	if !strings.Contains(plain(m.View()), "Critério de aceite") {
 		t.Error("aba inicial deveria mostrar o corpo do card")
 	}
 
 	m = press(t, m, "tab")
-	if !strings.Contains(m.View(), "as perguntas") {
-		t.Errorf("segunda aba deveria mostrar o artefato de refine:\n%s", m.View())
+	if !strings.Contains(plain(m.View()), "as perguntas") {
+		t.Errorf("segunda aba deveria mostrar o artefato de refine:\n%s", plain(m.View()))
 	}
 
 	m = press(t, m, "tab")
-	if !strings.Contains(m.View(), "o plano") {
+	if !strings.Contains(plain(m.View()), "o plano") {
 		t.Error("terceira aba deveria mostrar o artefato de qa")
 	}
 
@@ -1093,5 +1102,94 @@ func TestReleaseAgentWithoutAgentWarns(t *testing.T) {
 	m = press(t, m, "c")
 	if m.statusOK || !strings.Contains(m.status, "não tem agente") {
 		t.Errorf("deveria avisar que não há agente, status=%q", m.status)
+	}
+}
+
+func TestToggleCheckboxThroughUI(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com criterios")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Body = "## Critério de aceite\n\n- [ ] primeiro\n- [ ] segundo\n"
+	card.Save()
+	m.reload()
+
+	m = press(t, m, "enter") // abre o detalhe
+	if !strings.Contains(plain(m.View()), "1-9 marca item") {
+		t.Errorf("o rodapé deveria oferecer as teclas de item:\n%s", plain(m.View()))
+	}
+
+	m = press(t, m, "2")
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("todo")[0]
+	if !strings.Contains(got.Body, "- [ ] primeiro") {
+		t.Errorf("item 1 não deveria ter mudado:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "- [x] segundo") {
+		t.Errorf("item 2 deveria ter sido marcado:\n%s", got.Body)
+	}
+	if !strings.Contains(m.status, "marcado") {
+		t.Errorf("status deveria confirmar, veio %q", m.status)
+	}
+
+	// Apertar de novo desmarca.
+	m = press(t, m, "2")
+	b3, _ := board.Load(m.root)
+	if !strings.Contains(b3.CardsIn("todo")[0].Body, "- [ ] segundo") {
+		t.Error("apertar de novo deveria desmarcar")
+	}
+}
+
+func TestToggleCheckboxOnArtifactTabIsRefused(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com artefato")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Body = "- [ ] um\n"
+	card.Save()
+	card.WriteArtifact("refine", "# outro\n\n- [ ] item do artefato\n")
+	m.reload()
+
+	m = press(t, m, "enter")
+	m = press(t, m, "tab") // vai para a aba do artefato
+	m = press(t, m, "1")
+
+	if m.statusOK {
+		t.Error("marcar item fora da aba do card deveria ser recusado")
+	}
+	b2, _ := board.Load(m.root)
+	if !strings.Contains(b2.CardsIn("todo")[0].Body, "- [ ] um") {
+		t.Error("o item do card não deveria ter sido tocado")
+	}
+}
+
+func TestDetailRendersMarkdown(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "markdown")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Body = "## Seção\n\ntexto **forte** e `codigo`\n"
+	card.Save()
+	m.reload()
+
+	m = press(t, m, "enter")
+	out := m.View()
+
+	// O glamour aplica estilo: os asteriscos e crases somem do texto visível.
+	stripped := plain(out)
+	if strings.Contains(stripped, "**forte**") {
+		t.Errorf("o negrito deveria ter sido renderizado, não literal:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "forte") {
+		t.Errorf("o texto deveria continuar lá:\n%s", stripped)
+	}
+	if !strings.Contains(out, "\x1b[") {
+		t.Error("o detalhe deveria sair estilizado")
 	}
 }
