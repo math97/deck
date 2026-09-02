@@ -6,6 +6,9 @@ para disparar e acompanhar agentes, e com o `gh` para estado de PR.
 
 Padrões de Go, com exemplos deste código: [`docs/go-patterns.md`](docs/go-patterns.md).
 Instruções para agentes disparados pelo board: [`AGENTS.md`](AGENTS.md).
+Invariantes numeradas, cada uma com teste: [`docs/regras.md`](docs/regras.md).
+Modelo de ameaça e o que foi mitigado: [`docs/security.md`](docs/security.md).
+O que o herdr real ensinou: [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
 
 ## Comandos
 
@@ -149,6 +152,7 @@ Identificadores em inglês.
 
 Backlog priorizado e riscos conhecidos: [`HANDOFF.md`](HANDOFF.md).
 
-Funcional e coberto por teste. **Mas o caminho de agentes e o de escrita no PR
-nunca rodaram de verdade** — foram escritos contra `herdr api schema` e testes, sem um
-herdr vivo nem um PR real. Espere ajustes ao exercitar `s`, `f`, `c` e `R`.
+Funcional e coberto por teste. O caminho de agentes foi exercitado contra um
+herdr vivo e rendeu três correções — ver [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
+**O que ainda nunca rodou de verdade é a escrita no PR (`R`, `gh pr comment`) e
+o TUI dentro de um pane do herdr.** Espere ajustes ao exercitar isso.
