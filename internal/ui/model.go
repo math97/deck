@@ -80,6 +80,9 @@ type Model struct {
 	pendingBaseline baseline
 
 	confirm confirmState
+
+	// Rolagem do corpo no detalhe do card.
+	detailOffset int
 }
 
 // Mensagens internas.

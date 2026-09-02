@@ -47,11 +47,29 @@ func (m Model) viewBoard() string {
 		avail = 4
 	}
 
-	rendered := make([]string, 0, len(cols))
-	for i, col := range cols {
-		rendered = append(rendered, m.viewColumn(col, i == m.colIdx, width, avail))
+	// Nem todas as colunas cabem: mostra a janela que contém a focada.
+	perPage := m.width / width
+	start, end := windowColumns(len(cols), m.colIdx, perPage)
+
+	rendered := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		rendered = append(rendered, m.viewColumn(cols[i], i == m.colIdx, width, avail))
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
+	board := lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
+
+	// Avisa que há colunas fora da tela, senão elas simplesmente sumiriam.
+	if start > 0 || end < len(cols) {
+		var marks []string
+		if start > 0 {
+			marks = append(marks, fmt.Sprintf("‹ %d", start))
+		}
+		if end < len(cols) {
+			marks = append(marks, fmt.Sprintf("%d ›", len(cols)-end))
+		}
+		board = lipgloss.JoinVertical(lipgloss.Left,
+			board, styleColCount.Render(" "+strings.Join(marks, "   ")))
+	}
+	return board
 }
 
 // colWidth reparte a largura disponível entre as colunas, dentro de limites que
@@ -94,10 +112,32 @@ func (m Model) viewColumn(col *board.Column, focused bool, width, height int) st
 
 	if len(cards) == 0 {
 		lines = append(lines, styleEmpty.Render("vazio"))
-	}
-	for i, card := range cards {
-		selected := focused && i == m.cardIdx
-		lines = append(lines, m.viewCard(card, selected, width))
+	} else {
+		// Renderiza tudo, mede, e mostra só o que cabe — com o card em foco
+		// sempre dentro da janela.
+		boxes := make([]string, len(cards))
+		heights := make([]int, len(cards))
+		for i, card := range cards {
+			selected := focused && i == m.cardIdx
+			boxes[i] = m.viewCard(card, selected, width)
+			heights[i] = lipgloss.Height(boxes[i])
+		}
+
+		sel := 0
+		if focused {
+			sel = m.cardIdx
+		}
+		// -2 do cabeçalho, -1 de folga para o indicador de "há mais".
+		avail := height - 3
+		start, end, above, below := windowCards(heights, sel, avail)
+
+		if above > 0 {
+			lines = append(lines, styleColCount.Render(fmt.Sprintf(" ↑ %d", above)))
+		}
+		lines = append(lines, boxes[start:end]...)
+		if below > 0 {
+			lines = append(lines, styleColCount.Render(fmt.Sprintf(" ↓ %d", below)))
+		}
 	}
 
 	content := strings.Join(lines, "\n")
@@ -249,21 +289,30 @@ func (m Model) viewDetail() string {
 		}
 	}
 
-	// Limita a altura para o overlay não estourar a tela.
+	// Janela rolável: j/k andam, e o rodapé diz onde você está.
 	maxLines := m.height - 10
 	if maxLines < 5 {
 		maxLines = 5
 	}
 	lines := strings.Split(body, "\n")
+	scrollInfo := ""
 	if len(lines) > maxLines {
-		lines = append(lines[:maxLines], styleCardMeta.Render("… (e edita no $EDITOR)"))
+		off := m.detailOffset
+		if off > len(lines)-maxLines {
+			off = len(lines) - maxLines
+		}
+		if off < 0 {
+			off = 0
+		}
+		scrollInfo = fmt.Sprintf("  linha %d-%d de %d", off+1, off+maxLines, len(lines))
+		lines = lines[off : off+maxLines]
 		body = strings.Join(lines, "\n")
 	}
 
 	content := strings.Join([]string{head, meta, "", tabs, "", body}, "\n")
 	box := styleOverlay.Width(width).Render(content)
 
-	hint := styleStatus.Render("tab abas · e edita · o abre o PR · esc fecha")
+	hint := styleStatus.Render("tab abas · j/k rola · e edita · o abre o PR · esc fecha" + scrollInfo)
 	return lipgloss.JoinVertical(lipgloss.Left, box, hint)
 }
 
