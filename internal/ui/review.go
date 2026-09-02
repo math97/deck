@@ -34,8 +34,11 @@ func (m *Model) reviewArtifact(card *board.Card) (*board.Artifact, *board.Column
 	if a == nil {
 		return nil, nil, fmt.Errorf("ainda não há review — rode o agente com s")
 	}
-	info, err := os.Stat(a.Path)
-	if err != nil || info.Size() == 0 {
+	// Vazio é medido pelo conteúdo, não pelo tamanho: WriteArtifact garante a
+	// quebra de linha final, então um review sem nada escrito tem 1 byte e
+	// passaria por uma checagem de tamanho — direto para um PR público.
+	raw, err := os.ReadFile(a.Path)
+	if err != nil || strings.TrimSpace(string(raw)) == "" {
 		return nil, nil, fmt.Errorf("o review está vazio")
 	}
 	return a, col, nil

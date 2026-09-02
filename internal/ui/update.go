@@ -442,6 +442,16 @@ func (m Model) moveCard(delta int) (tea.Model, tea.Cmd) {
 			break
 		}
 	}
+	// Mover com agente vivo é permitido — o card é um arquivo, e o usuário
+	// poderia mover editando o frontmatter à mão; uma regra que o markdown
+	// contorna não é uma regra. Mas o agente segue trabalhando contra a coluna
+	// de onde subiu, e vai gravar o artefato **dela**, então avisar é o mínimo.
+	if a, live := m.agentFor(card); live && a.Status != herdr.StatusDone {
+		m.setStatus(false, "→ %s · o agente %s continua na coluna anterior e grava o artefato dela",
+			cols[target].Title, a.Name)
+		return m, clearStatusCmd()
+	}
+
 	m.setStatus(true, "→ %s", cols[target].Title)
 	return m, clearStatusCmd()
 }
