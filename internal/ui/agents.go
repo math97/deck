@@ -41,7 +41,23 @@ type agentStartedMsg struct {
 	fallback  bool   // houve provedor recusado antes deste
 	workspace string // preenchido quando o agente ganhou worktree própria
 	worktree  string
+	pending   string // tarefa que ainda não pôde ser entregue (agente bloqueado)
 	err       error
+}
+
+// promptSentMsg é a entrega tardia de uma tarefa que esperou o agente liberar.
+type promptSentMsg struct {
+	name string
+	err  error
+}
+
+// sendPrompt entrega a tarefa a um agente que já está pronto para recebê-la.
+func sendPrompt(name, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return promptSentMsg{name: name, err: herdr.AgentPrompt(ctx, name, prompt)}
+	}
 }
 
 // insideGitRepo diz se o diretório está sob controle do git. Sem repositório
@@ -149,7 +165,11 @@ func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[s
 		)
 		for _, kind := range kinds {
 			agent, err2 = herdr.AgentStart(ctx, name, kind, paneID)
-			if err2 == nil {
+			// A parada é ter agente, não ausência de erro: um agente que subiu
+			// bloqueado numa pergunta vem com os dois. Insistir com o próximo
+			// tipo no mesmo pane só produziria agent_pane_busy, e ainda deixaria
+			// o primeiro agente vivo e sem dono.
+			if agent != nil {
 				used = kind
 				break
 			}
@@ -165,6 +185,13 @@ func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[s
 			cardPath: card.Path, agent: agent, kind: used,
 			fallback:  len(attempts) > 0,
 			workspace: workspace, worktree: worktree,
+		}
+		// Agente parado numa pergunta não aceita tarefa ainda — o herdr recusa
+		// com agent_blocked. A tarefa fica pendente e o poller a entrega assim
+		// que ele liberar; mandar agora só perderia o prompt.
+		if agent.Status == herdr.StatusBlocked || err2 != nil {
+			msg.pending = prompt
+			return msg
 		}
 		if err := herdr.AgentPrompt(ctx, name, prompt); err != nil {
 			msg.err = err

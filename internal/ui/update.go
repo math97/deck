@@ -50,6 +50,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agentsMsg:
 		cmds := m.detectFinished(msg)
+		cmds = append(cmds, m.deliverPending(msg)...)
 		m.agents = msg
 		m.clampCursor()
 		return m, tea.Batch(cmds...)
@@ -59,6 +60,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agentStartedMsg:
 		return m.agentStarted(msg)
+
+	case promptSentMsg:
+		if msg.err != nil {
+			m.setStatus(false, "agente %s não recebeu a tarefa: %v", msg.name, msg.err)
+		} else {
+			m.setStatus(true, "tarefa entregue ao agente %s", msg.name)
+		}
+		return m, clearStatusCmd()
 
 	case captureMsg:
 		return m.captured(msg)
@@ -547,6 +556,17 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 	m.baselines[msg.agent.Name] = m.pendingBaseline
 	m.pendingBaseline = baseline{}
 
+	// Subiu parado numa pergunta: o agente é do card, mas a tarefa espera.
+	// Dizer isso é melhor que dizer "rodando" sobre um agente que não recebeu
+	// nada — e o `f` leva o usuário até a pergunta.
+	if msg.pending != "" {
+		m.pendingPrompts[msg.agent.Name] = msg.pending
+		m.setStatus(false,
+			"agente %s subiu esperando resposta — vá até ele com f; a tarefa segue quando liberar",
+			msg.agent.Name)
+		return m, tea.Batch(pollAgents(), clearStatusCmd())
+	}
+
 	if msg.fallback {
 		m.setStatus(true, "agente %s rodando com %s (o primeiro provedor recusou)",
 			msg.agent.Name, msg.kind)
@@ -657,6 +677,30 @@ func (m *Model) detectFinished(next agentsMsg) []tea.Cmd {
 			base.exists = false
 		}
 		cmds = append(cmds, captureAgentResult(card, name, base))
+	}
+	return cmds
+}
+
+// deliverPending entrega a tarefa que ficou esperando um agente que subiu
+// parado numa pergunta — a de confiança do provedor é a comum.
+//
+// Sem isso o agente fica no pane sem tarefa nenhuma enquanto o card afirma que
+// ele está trabalhando, que é a pior combinação possível: nada acontece e nada
+// avisa.
+func (m *Model) deliverPending(next agentsMsg) []tea.Cmd {
+	var cmds []tea.Cmd
+	for name, prompt := range m.pendingPrompts {
+		ag, alive := next[name]
+		if !alive {
+			// Agente morreu antes de receber a tarefa: não há o que entregar.
+			delete(m.pendingPrompts, name)
+			continue
+		}
+		if ag.Status == herdr.StatusBlocked {
+			continue
+		}
+		delete(m.pendingPrompts, name)
+		cmds = append(cmds, sendPrompt(name, prompt))
 	}
 	return cmds
 }

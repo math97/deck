@@ -12,6 +12,7 @@ package herdr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -78,22 +79,69 @@ func Inside() bool {
 // PaneID devolve o pane em que este processo roda.
 func PaneID() string { return os.Getenv("HERDR_PANE_ID") }
 
-// run executa um comando do herdr e decodifica o result.
-func run(ctx context.Context, out any, args ...string) error {
+// Códigos de erro do herdr que mudam a decisão do deck. Verificados contra um
+// herdr 0.8.2 vivo; qualquer outro código é só mensagem para o usuário.
+const (
+	// CodeAgentNotReady: o agente subiu, mas parou numa pergunta antes de
+	// aceitar prompt. Vivo, e o nome já é utilizável.
+	CodeAgentNotReady = "agent_not_ready"
+	// CodeAgentBlocked: o agente está esperando input e recusa prompt.
+	CodeAgentBlocked = "agent_blocked"
+	// CodePaneBusy: já há processo no pane, então não dá para subir outro.
+	CodePaneBusy = "agent_pane_busy"
+	// CodeDirtyWorktree: há trabalho não commitado; remover exigiria --force.
+	CodeDirtyWorktree = "dirty_worktree_requires_force"
+)
+
+// Error é um erro devolvido pelo próprio herdr, com o código que ele usa para
+// classificar a falha.
+//
+// O código não se perde aqui porque muda a decisão: `agent_not_ready` quer
+// dizer que o agente subiu e está esperando você, não que ele falhou — tratar
+// os dois casos igual faz o deck abandonar um agente vivo.
+type Error struct {
+	Op      string // subcomando, para a mensagem
+	Code    string
+	Message string
+}
+
+func (e *Error) Error() string { return fmt.Sprintf("herdr %s: %s", e.Op, e.Message) }
+
+// Code devolve o código do herdr num erro, ou "" quando o erro veio de outro
+// lugar — timeout, binário ausente, resposta ilegível.
+func Code(err error) string {
+	var he *Error
+	if errors.As(err, &he) {
+		return he.Code
+	}
+	return ""
+}
+
+// output executa um comando do herdr e devolve a saída crua.
+func output(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "herdr", args...)
 	stdout, err := cmd.Output()
-	if err != nil {
-		// Erro do servidor vem como JSON no stderr; erro de sintaxe, texto.
-		if ee, ok := err.(*exec.ExitError); ok {
-			var env envelope
-			if json.Unmarshal(ee.Stderr, &env) == nil && env.Error != nil {
-				return fmt.Errorf("herdr %s: %s", args[0], env.Error.Message)
-			}
-			if msg := strings.TrimSpace(string(ee.Stderr)); msg != "" {
-				return fmt.Errorf("herdr %s: %s", args[0], firstLine(msg))
-			}
+	if err == nil {
+		return stdout, nil
+	}
+	// Erro do servidor vem como JSON no stderr; erro de sintaxe, texto.
+	if ee, ok := err.(*exec.ExitError); ok {
+		var env envelope
+		if json.Unmarshal(ee.Stderr, &env) == nil && env.Error != nil {
+			return nil, &Error{Op: args[0], Code: env.Error.Code, Message: env.Error.Message}
 		}
-		return fmt.Errorf("herdr %s: %w", args[0], err)
+		if msg := strings.TrimSpace(string(ee.Stderr)); msg != "" {
+			return nil, &Error{Op: args[0], Message: firstLine(msg)}
+		}
+	}
+	return nil, fmt.Errorf("herdr %s: %w", args[0], err)
+}
+
+// run executa um comando do herdr e decodifica o result.
+func run(ctx context.Context, out any, args ...string) error {
+	stdout, err := output(ctx, args...)
+	if err != nil {
+		return err
 	}
 
 	var env envelope
@@ -101,7 +149,7 @@ func run(ctx context.Context, out any, args ...string) error {
 		return fmt.Errorf("herdr %s: resposta ilegível: %w", args[0], err)
 	}
 	if env.Error != nil {
-		return fmt.Errorf("herdr %s: %s", args[0], env.Error.Message)
+		return &Error{Op: args[0], Code: env.Error.Code, Message: env.Error.Message}
 	}
 	if out == nil {
 		return nil
@@ -163,10 +211,28 @@ func SplitDirection(ctx context.Context, paneID string) string {
 	return "down"
 }
 
+// AgentGet devolve o que o herdr sabe sobre um agente, pelo nome.
+func AgentGet(ctx context.Context, target string) (*Agent, error) {
+	var res struct {
+		Agent Agent `json:"agent"`
+	}
+	if err := run(ctx, &res, "agent", "get", target); err != nil {
+		return nil, err
+	}
+	return &res.Agent, nil
+}
+
 // AgentStart sobe um agente num pane que já existe e está no prompt.
 //
-// Devolve o agente já pronto para receber input. Se o agente subir bloqueado
-// numa pergunta, o herdr responde agent_not_ready mas mantém o nome utilizável.
+// Um agente pode subir e parar numa pergunta antes de aceitar tarefa — o
+// "confia nesta pasta?" do Claude Code é o caso comum. O herdr responde
+// `agent_not_ready`, mas o agente **está vivo** e o nome já é utilizável;
+// por isso ele é devolvido junto com o erro, em vez de descartado.
+//
+// Isso é o que impede o deck de abandonar um agente que ele mesmo criou: sem
+// isso o card fica sem agente, o `c` não tem o que fechar, a worktree fica
+// órfã, e a cadeia de provedores ainda tenta o próximo tipo no mesmo pane —
+// que a essa altura devolve `agent_pane_busy`.
 func AgentStart(ctx context.Context, name, kind, paneID string) (*Agent, error) {
 	if kind == "" {
 		kind = "claude"
@@ -175,10 +241,16 @@ func AgentStart(ctx context.Context, name, kind, paneID string) (*Agent, error) 
 		Agent Agent `json:"agent"`
 	}
 	err := run(ctx, &res, "agent", "start", name, "--kind", kind, "--pane", paneID)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		return &res.Agent, nil
 	}
-	return &res.Agent, nil
+	if Code(err) == CodeAgentNotReady {
+		// O start não devolveu o agente, mas o herdr já o conhece pelo nome.
+		if ag, gerr := AgentGet(ctx, name); gerr == nil && ag.Name != "" {
+			return ag, err
+		}
+	}
+	return nil, err
 }
 
 // AgentPrompt envia texto ao agente. Sem --wait: o board não pode congelar
