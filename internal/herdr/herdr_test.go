@@ -97,3 +97,17 @@ func TestInsideRequiresEnvVar(t *testing.T) {
 		t.Error("HERDR_ENV=0 não deveria contar como dentro")
 	}
 }
+
+func TestUnknownKindsWithoutHerdr(t *testing.T) {
+	// Sem lista de kinds — herdr ausente — não há o que validar, e validação
+	// indisponível não pode virar erro.
+	if got := UnknownKinds([]string{"qualquer-coisa"}); got != nil && len(KnownKinds()) == 0 {
+		t.Errorf("sem herdr, nada deveria ser reportado como desconhecido: %v", got)
+	}
+}
+
+func TestUnknownKindsIgnoresEmpty(t *testing.T) {
+	if got := UnknownKinds(nil); len(got) != 0 {
+		t.Errorf("lista vazia não tem desconhecidos: %v", got)
+	}
+}

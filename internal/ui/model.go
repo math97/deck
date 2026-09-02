@@ -126,6 +126,7 @@ func New(b *board.Board) Model {
 	m.ghEnabled = cfg.GitHub.Enabled(gh.Installed())
 	m.herdrInside = cfg.Herdr.Enabled(herdr.Inside())
 	m.fsEvents = startWatcher(b.Root)
+	m.checkAgentKinds()
 	m.syncErrors()
 	return m
 }
@@ -209,6 +210,21 @@ func matchesCard(c *board.Card, needle string) bool {
 	return strings.Contains(strings.ToLower(c.Title), needle) ||
 		strings.Contains(strings.ToLower(c.ID), needle) ||
 		strings.Contains(strings.ToLower(c.Body), needle)
+}
+
+// checkAgentKinds avisa sobre provedor que este herdr não reconhece —
+// tipicamente um erro de digitação no agent_kind de uma coluna, que sem isso só
+// apareceria na hora de disparar.
+func (m *Model) checkAgentKinds() {
+	if !m.herdrInside {
+		return
+	}
+	for _, col := range m.b.Columns {
+		if bad := herdr.UnknownKinds(col.AgentKinds); len(bad) > 0 {
+			m.b.Errors = append(m.b.Errors, fmt.Sprintf(
+				"coluna %s: provedor desconhecido %s", col.Title, strings.Join(bad, ", ")))
+		}
+	}
 }
 
 // countWaiting conta os agentes parados esperando resposta sua.

@@ -1465,3 +1465,25 @@ func TestImportErrorIsReported(t *testing.T) {
 		t.Error("erro não deveria criar card")
 	}
 }
+
+func TestUnknownAgentKindBecomesBoardWarning(t *testing.T) {
+	dir := t.TempDir()
+	root, _, _ := board.Init(dir)
+	os.WriteFile(filepath.Join(root, "columns", "refine.md"),
+		[]byte("---\ntitle: Refine\norder: 20\nagent_kind: claude, opencde\n---\n\nprompt\n"), 0o644)
+
+	b, _ := board.Load(root)
+	m := New(b)
+	m.width, m.height = 160, 40
+
+	// Fora do herdr não há lista para comparar, então não há aviso — validação
+	// indisponível não pode virar ruído.
+	if m.herdrInside {
+		t.Skip("teste assume execução fora de uma sessão do herdr")
+	}
+	for _, e := range m.b.Errors {
+		if strings.Contains(e, "provedor desconhecido") {
+			t.Errorf("sem herdr não deveria haver aviso de provedor: %q", e)
+		}
+	}
+}

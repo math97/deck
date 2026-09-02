@@ -17,6 +17,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Status é o ciclo de vida que o herdr reconhece num agente.
@@ -376,4 +378,66 @@ func BranchName(cardID string) string {
 		slug = strings.TrimRight(slug[:40], "-")
 	}
 	return "deck/" + slug
+}
+
+var (
+	kindsOnce  sync.Once
+	knownKinds []string
+)
+
+// KnownKinds devolve os tipos de agente que este herdr reconhece.
+//
+// A lista vem do próprio binário — `herdr agent` a imprime — em vez de ser
+// fixada aqui, porque cada versão do herdr suporta um conjunto diferente e uma
+// cópia no código envelheceria em silêncio. A chamada é local e custa ~10ms,
+// então cabe no carregamento; o resultado é lembrado pelo processo.
+//
+// Devolve nil quando o herdr não está disponível — nesse caso não há o que
+// validar, e validação indisponível não pode virar erro.
+func KnownKinds() []string {
+	kindsOnce.Do(func() {
+		if _, err := exec.LookPath("herdr"); err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// `herdr agent` sem subcomando imprime o uso e sai com status 2, então
+		// o erro é esperado; o que interessa é a linha "kinds:".
+		out, _ := exec.CommandContext(ctx, "herdr", "agent").CombinedOutput()
+		for _, line := range strings.Split(string(out), "\n") {
+			_, rest, ok := strings.Cut(line, "kinds:")
+			if !ok {
+				continue
+			}
+			for _, k := range strings.Split(strings.TrimSpace(rest), "|") {
+				if k = strings.TrimSpace(k); k != "" {
+					knownKinds = append(knownKinds, k)
+				}
+			}
+			return
+		}
+	})
+	return knownKinds
+}
+
+// UnknownKinds devolve os tipos que este herdr não reconhece — tipicamente um
+// erro de digitação no agent_kind de uma coluna.
+func UnknownKinds(kinds []string) []string {
+	known := KnownKinds()
+	if len(known) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(known))
+	for _, k := range known {
+		set[k] = true
+	}
+
+	var bad []string
+	for _, k := range kinds {
+		if !set[strings.ToLower(strings.TrimSpace(k))] {
+			bad = append(bad, k)
+		}
+	}
+	return bad
 }

@@ -112,9 +112,19 @@ Uma coluna pode apontar para uma skill (`skill: <nome>`) em vez de ter prompt
 próprio. O corpo da skill é **inlinado** no prompt, não invocado como
 `/nome`: assim funciona com qualquer agent kind, não só Claude Code.
 
-`agent_kind` é uma cadeia (`claude, codex`): o `startAgent` tenta em ordem e
+`agent_kind` é uma cadeia (`claude, opencode`): o `startAgent` tenta em ordem e
 segue no primeiro que subir. É o que permite continuar quando a cota de um
 provedor acaba. O provedor usado vai para o `## Log` do card.
+
+O deck **não fala com API de modelo**. Acesso a OpenRouter, OmniRouter e afins
+acontece dentro do `opencode`, que o usuário configura. Isso mantém o deck sem
+chave de API, sem dependência de rede no caminho de execução, e com um único
+modelo de execução (agente em pane do herdr) — que é o que evita precisar de uma
+segunda implementação de backend.
+
+`herdr.KnownKinds()` lê a lista de tipos do próprio binário em vez de fixá-la no
+código: cada versão do herdr suporta um conjunto diferente, e uma cópia aqui
+envelheceria em silêncio.
 
 `board` não conhece o disco de skills: `board.Skills` é uma função injetada
 pelo `cmd`, o que mantém o núcleo puro e deixa o teste usar uma skill de
