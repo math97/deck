@@ -12,6 +12,9 @@ import (
 // DirName é o diretório de estado, procurado a partir do cwd para cima.
 const DirName = ".deck"
 
+// CardFileName é o markdown do card dentro de um card promovido a diretório.
+const CardFileName = "card.md"
+
 // Find sobe a árvore de diretórios procurando .deck, como o git faz com .git.
 func Find(start string) (string, error) {
 	dir, err := filepath.Abs(start)
@@ -111,22 +114,38 @@ func loadCards(b *Board) error {
 	}
 
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		var cardPath, cardDir, stem string
+
+		switch {
+		case e.IsDir():
+			// Card promovido: cards/<id>/card.md, com os artefatos ao lado.
+			cardDir = filepath.Join(dir, e.Name())
+			cardPath = filepath.Join(cardDir, CardFileName)
+			if _, err := os.Stat(cardPath); err != nil {
+				b.addError("pasta %s não tem %s", e.Name(), CardFileName)
+				continue
+			}
+			stem = e.Name()
+
+		case strings.HasSuffix(e.Name(), ".md"):
+			cardPath = filepath.Join(dir, e.Name())
+			stem = strings.TrimSuffix(e.Name(), ".md")
+
+		default:
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		raw, err := os.ReadFile(path)
+
+		raw, err := os.ReadFile(cardPath)
 		if err != nil {
-			b.addError("card %s: %v", e.Name(), err)
+			b.addError("card %s: %v", stem, err)
 			continue
 		}
 		doc, err := ParseDoc(raw)
 		if err != nil {
-			b.addError("card %s: %v", e.Name(), err)
+			b.addError("card %s: %v", stem, err)
 			continue
 		}
 
-		stem := strings.TrimSuffix(e.Name(), ".md")
 		id := doc.GetString("id")
 		if id == "" {
 			id = stem
@@ -137,15 +156,18 @@ func loadCards(b *Board) error {
 		}
 
 		card := &Card{
-			ID:      id,
-			Path:    path,
-			Title:   title,
-			Column:  doc.GetString("column"),
-			Order:   atoiOr(doc.GetString("order"), 0),
-			Created: parseTimeOr(doc.GetString("created"), time.Time{}),
-			Updated: parseTimeOr(doc.GetString("updated"), time.Time{}),
-			Body:    doc.Body,
-			doc:     doc,
+			ID:          id,
+			Path:        cardPath,
+			Dir:         cardDir,
+			Title:       title,
+			Column:      doc.GetString("column"),
+			Order:       atoiOr(doc.GetString("order"), 0),
+			Created:     parseTimeOr(doc.GetString("created"), time.Time{}),
+			Updated:     parseTimeOr(doc.GetString("updated"), time.Time{}),
+			GitHubPR:    doc.GetString("github_pr"),
+			GitHubIssue: doc.GetString("github_issue"),
+			Body:        doc.Body,
+			doc:         doc,
 		}
 		if name := doc.GetString("agent_name"); name != "" {
 			card.Agent = &AgentRef{
@@ -154,9 +176,32 @@ func loadCards(b *Board) error {
 				Kind: doc.GetString("agent_kind"),
 			}
 		}
+		if cardDir != "" {
+			loadArtifacts(b, card)
+		}
 		b.Cards = append(b.Cards, card)
 	}
 	return nil
+}
+
+// loadArtifacts lista os markdowns ao lado do card. O stem de cada arquivo é a
+// key da coluna que o produziu.
+func loadArtifacts(b *Board, card *Card) {
+	entries, err := os.ReadDir(card.Dir)
+	if err != nil {
+		b.addError("artefatos de %s: %v", card.ID, err)
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") || e.Name() == CardFileName {
+			continue
+		}
+		key := strings.TrimSuffix(e.Name(), ".md")
+		card.Artifacts = append(card.Artifacts, &Artifact{
+			Column: key,
+			Path:   filepath.Join(card.Dir, e.Name()),
+		})
+	}
 }
 
 // reconcile move para a coluna órfã todo card que aponta para uma key que não
@@ -167,8 +212,22 @@ func reconcile(b *Board) {
 		valid[c.Key] = true
 	}
 
+	// Dá aos artefatos o título da coluna que os produziu, para exibição.
+	titles := map[string]string{}
+	for _, c := range b.Columns {
+		titles[c.Key] = c.Title
+	}
+
 	orphans := 0
 	for _, card := range b.Cards {
+		for _, a := range card.Artifacts {
+			if t, ok := titles[a.Column]; ok {
+				a.Title = t
+			} else {
+				// Artefato de uma coluna que não existe mais continua legível.
+				a.Title = a.Column
+			}
+		}
 		if card.Column == "" || !valid[card.Column] {
 			orphans++
 			card.Column = OrphanColumn
@@ -197,6 +256,9 @@ func (c *Card) Save() error {
 		c.doc.SetString("created", c.Created.Format(time.RFC3339))
 	}
 	c.doc.SetString("updated", c.Updated.Format(time.RFC3339))
+
+	setOrDelete(c.doc, "github_pr", c.GitHubPR)
+	setOrDelete(c.doc, "github_issue", c.GitHubIssue)
 
 	if c.Agent != nil {
 		c.doc.SetString("agent_name", c.Agent.Name)

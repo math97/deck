@@ -1,0 +1,104 @@
+package ui
+
+import (
+	"os/exec"
+	"runtime"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/matheusalbuquerque/deck/internal/board"
+)
+
+// tabs devolve as abas do detalhe: o card em si, mais um artefato por coluna
+// que já produziu algo. A ordem segue a das colunas, para que a esteira apareça
+// na tela na mesma sequência em que aconteceu.
+func (m Model) tabs(card *board.Card) []*board.Artifact {
+	if card == nil {
+		return nil
+	}
+	var out []*board.Artifact
+	for _, col := range m.columns() {
+		if a := card.Artifact(col.Key); a != nil {
+			out = append(out, a)
+		}
+	}
+	// Artefatos de colunas que não existem mais entram no fim, para não sumir.
+	for _, a := range card.Artifacts {
+		if m.b.Column(a.Column) == nil {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// updateDetail trata as teclas com o card aberto.
+func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	card := m.currentCard()
+	if card == nil {
+		m.mode = modeNormal
+		return m, nil
+	}
+	n := len(m.tabs(card)) + 1 // +1 pela aba do próprio card
+
+	switch msg.String() {
+	case "esc", "q":
+		m.mode = modeNormal
+		m.tabIdx = 0
+		return m, nil
+
+	case "tab", "right", "l":
+		m.tabIdx = (m.tabIdx + 1) % n
+		return m, nil
+
+	case "shift+tab", "left", "h":
+		m.tabIdx = (m.tabIdx - 1 + n) % n
+		return m, nil
+
+	case "e":
+		// Edita o que está na aba ativa: o card ou o artefato.
+		return m, openEditor(m.activePath(card))
+
+	case "o":
+		return m.openPR(card)
+	}
+	return m, nil
+}
+
+// activePath devolve o arquivo por trás da aba ativa.
+func (m Model) activePath(card *board.Card) string {
+	tabs := m.tabs(card)
+	if m.tabIdx == 0 || m.tabIdx-1 >= len(tabs) {
+		return card.Path
+	}
+	return tabs[m.tabIdx-1].Path
+}
+
+// openPR abre o pull request associado no browser.
+func (m Model) openPR(card *board.Card) (tea.Model, tea.Cmd) {
+	url := card.GitHubPR
+	if url == "" {
+		url = card.GitHubIssue
+	}
+	if url == "" {
+		m.setStatus(false, "card sem github_pr no frontmatter")
+		return m, clearStatusCmd()
+	}
+	return m, tea.Batch(openBrowser(url), clearStatusCmd())
+}
+
+// openBrowser abre uma URL no navegador padrão do sistema.
+func openBrowser(url string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("open", url)
+		case "windows":
+			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		default:
+			cmd = exec.Command("xdg-open", url)
+		}
+		_ = cmd.Start()
+		return nil
+	}
+}

@@ -17,6 +17,9 @@ uso:
   deck            abre o board (procura .deck a partir do diretório atual)
   deck init       cria .deck com as colunas padrão
   deck ls         lista os cards por coluna, sem abrir o TUI
+  deck prompt <card>
+                  imprime o prompt da coluna atual do card, já renderizado
+                  (útil para mandar a um agente: deck prompt x | claude -p)
   deck help       esta mensagem
 
 o board vive em .deck/
@@ -44,6 +47,8 @@ func run() error {
 		return runInit()
 	case "ls":
 		return runList()
+	case "prompt":
+		return runPrompt(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return nil
@@ -122,5 +127,51 @@ func runList() error {
 	for _, e := range b.Errors {
 		fmt.Fprintf(os.Stderr, "\n⚠ %s\n", e)
 	}
+	return nil
+}
+
+// runPrompt renderiza o prompt da coluna em que o card está, com as variáveis
+// substituídas. É a ponte entre o board e um agente antes de a integração com
+// o herdr existir: `deck prompt <card> | claude -p`.
+func runPrompt(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("uso: deck prompt <card-id>")
+	}
+	id := args[0]
+
+	b, err := load()
+	if err != nil {
+		return err
+	}
+
+	var card *board.Card
+	for _, c := range b.Cards {
+		if c.ID == id {
+			card = c
+			break
+		}
+	}
+	if card == nil {
+		return fmt.Errorf("card %q não encontrado (veja `deck ls`)", id)
+	}
+
+	col := b.Column(card.Column)
+	if col == nil {
+		return fmt.Errorf("card %q está numa coluna inexistente", id)
+	}
+	if !col.HasPrompt() {
+		return fmt.Errorf("a coluna %s não tem prompt — nada a disparar aqui", col.Title)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	out, err := b.RenderPrompt(card, col, cwd)
+	if err != nil {
+		return err
+	}
+	fmt.Println(out)
 	return nil
 }

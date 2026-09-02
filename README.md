@@ -15,9 +15,16 @@ go build -o ~/.local/bin/deck ./cmd/deck
 ## Uso
 
 ```sh
-deck init    # cria .deck/ com as cinco colunas padrão
-deck         # abre o board
-deck ls      # lista os cards em texto puro, sem TUI
+deck init            # cria .deck/ com as cinco colunas padrão
+deck                 # abre o board
+deck ls              # lista os cards em texto puro, sem TUI
+deck prompt <card>   # imprime o prompt da coluna atual, já renderizado
+```
+
+`deck prompt` é a ponte com um agente antes da integração com o herdr:
+
+```sh
+deck prompt migrar-oidc | claude -p
 ```
 
 `deck` procura `.deck/` a partir do diretório atual e sobe a árvore, como o git
@@ -34,8 +41,20 @@ faz com `.git`.
     qa.md
     done.md
   cards/
-    corrigir-login.md  frontmatter = estado, corpo = contexto
+    corrigir-login.md      card simples: um arquivo
+    migrar-oidc/           card que acumulou trabalho
+      card.md              o card em si
+      refine.md            saída da coluna Refine
+      in-progress.md       plano e registro da implementação
+      qa.md                plano de testes e resultado
 ```
+
+Um card nasce como `<id>.md`. Na primeira vez que algo precisa gravar um
+artefato, o deck promove para `<id>/card.md` sozinho — você nunca decide isso.
+
+**O nome do artefato é a key da coluna que o produziu.** Uma regra, zero
+configuração: a coluna já define o prompt, agora define também onde a saída
+daquele prompt mora.
 
 ### Coluna
 
@@ -82,6 +101,36 @@ updated: 2026-09-01T14:20:00-03:00
 A seção `## Log` é escrita automaticamente a cada transição. É o que faz um card
 parado há duas semanas voltar a fazer sentido quando você o reabre.
 
+## A esteira
+
+Cada coluna recebe, no rodapé do prompt, a lista dos artefatos que as colunas
+anteriores produziram. O agente de In Progress lê o `refine.md`; o de QA lê os
+dois. É isso que transforma cinco prompts soltos numa corrente — e por isso o
+formato tem que ser markdown legível, não log de sessão.
+
+Esse rodapé é anexado **sempre**, independente do que você escreveu no prompt
+da coluna. A esteira não pode depender de você lembrar de uma variável.
+
+Variáveis disponíveis: `{{card_path}}`, `{{card_dir}}`, `{{card_id}}`,
+`{{card_title}}`, `{{output_path}}`, `{{artifacts}}`, `{{column}}`,
+`{{to_column}}`, `{{cwd}}`, `{{github_pr}}`.
+
+## GitHub
+
+Ponha o link no frontmatter do card:
+
+```yaml
+github_pr: https://github.com/org/repo/pull/123
+github_issue: https://github.com/org/repo/issues/45
+```
+
+O deck consulta o `gh` a cada 60s e mostra um badge no card: `✓ CI ok`,
+`✗ CI 2/5`, `⏳ review`, `↩ mudanças`, `◆ merged`, `draft`. No detalhe do card
+aparece o resumo completo, e `o` abre o PR no browser.
+
+Requer `gh auth login`. Sem isso o deck simplesmente não mostra badges — nada
+quebra.
+
 ## Teclas
 
 | tecla | ação |
@@ -91,7 +140,9 @@ parado há duas semanas voltar a fazer sentido quando você o reabre.
 | `g` `G` | primeiro / último card |
 | `H` `L` | mover o card para a coluna vizinha |
 | `J` `K` | reordenar o card dentro da coluna |
-| `enter` | abrir o card |
+| `enter` | abrir o card (abas: card + um artefato por coluna) |
+| `tab` | próxima aba no detalhe do card |
+| `o` | abrir o PR do card no browser |
 | `n` | novo card na coluna focada |
 | `e` | editar o card no `$EDITOR` |
 | `p` | editar a coluna — título, config e prompt |
@@ -120,13 +171,16 @@ board assim que qualquer arquivo muda — inclusive quando um agente edita um ca
 
 ## Estado
 
-Fase 1 concluída: board navegável, colunas e prompts editáveis, cards criados e
-movidos, log automático.
+Fases 1 e 2 concluídas: board navegável, colunas e prompts editáveis, cards
+criados e movidos com log automático, artefatos por coluna com promoção
+automática a pasta, abas no detalhe do card, e badges de PR via `gh`.
 
 Próximas fases:
 
-2. Detalhe do card renderizado com glamour, busca, checkboxes marcáveis no TUI
-3. Integração com o [herdr](https://herdr.dev): `a` dispara um agente no prompt
-   da coluna, badge de estado (`working` / `blocked` / `done`) por card, `f`
-   pula para o pane
-4. Captura do resultado do agente de volta na seção `## Log` do card
+3. Integração com o [herdr](https://herdr.dev): `a` dispara um agente com o
+   prompt da coluna, badge de estado (`working` / `blocked` / `done`) por card,
+   `f` pula para o pane
+4. Captura do resultado do agente de volta no artefato e no `## Log`
+
+Depois: renderização com glamour, busca, checkboxes marcáveis, e integração com
+Jira como terceira fonte ao lado do GitHub.

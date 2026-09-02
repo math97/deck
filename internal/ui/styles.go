@@ -56,3 +56,12 @@ var (
 	styleHelpKey  = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	styleHelpDesc = lipgloss.NewStyle().Foreground(colMuted)
 )
+
+// Badges de estado do PR e abas do detalhe do card.
+var (
+	styleBadgeOK  = lipgloss.NewStyle().Foreground(colOK)
+	styleBadgeBad = lipgloss.NewStyle().Foreground(colErr)
+
+	styleTabActive = lipgloss.NewStyle().Foreground(colAccent).Bold(true).Underline(true)
+	styleTabIdle   = lipgloss.NewStyle().Foreground(colFaint)
+)
