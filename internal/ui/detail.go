@@ -77,8 +77,33 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "o":
 		return m.openPR(card)
+
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		return m.toggleCheckbox(card, int(msg.String()[0]-'0'))
 	}
 	return m, nil
+}
+
+// toggleCheckbox marca ou desmarca um critério de aceite direto no TUI,
+// gravando no markdown do card.
+func (m Model) toggleCheckbox(card *board.Card, n int) (tea.Model, tea.Cmd) {
+	if m.tabIdx != 0 {
+		m.setStatus(false, "os itens ficam na aba do card")
+		return m, clearStatusCmd()
+	}
+	box, err := card.ToggleCheckbox(n)
+	if err != nil {
+		m.setStatus(false, "%v", err)
+		return m, clearStatusCmd()
+	}
+
+	mark := "desmarcado"
+	if box.Checked {
+		mark = "marcado"
+	}
+	m.reload()
+	m.setStatus(true, "%s: %s", mark, box.Text)
+	return m, clearStatusCmd()
 }
 
 // activePath devolve o arquivo por trás da aba ativa.

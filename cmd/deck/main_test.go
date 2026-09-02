@@ -158,3 +158,54 @@ func TestBoardIsFoundFromSubdirectory(t *testing.T) {
 		t.Errorf("deveria ter encontrado o board acima:\n%s", out.String())
 	}
 }
+
+func TestNewCreatesCardAndPrintsID(t *testing.T) {
+	dir := initBoard(t)
+
+	var out bytes.Buffer
+	if err := run([]string{"new", "Corrigir refresh de token"}, dir, &out); err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	// Imprime só o id, para um script encadear.
+	if got := strings.TrimSpace(out.String()); got != "corrigir-refresh-de-token" {
+		t.Errorf("saída deveria ser só o id, veio %q", got)
+	}
+
+	out.Reset()
+	run([]string{"ls"}, dir, &out)
+	if !strings.Contains(out.String(), "To Do (1)") {
+		t.Errorf("card deveria ter caído na primeira coluna:\n%s", out.String())
+	}
+}
+
+func TestNewRespectsColumnFlag(t *testing.T) {
+	dir := initBoard(t)
+
+	var out bytes.Buffer
+	if err := run([]string{"new", "Revisar", "--column", "code-review"}, dir, &out); err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	out.Reset()
+	run([]string{"ls"}, dir, &out)
+	if !strings.Contains(out.String(), "Code Review (1)") {
+		t.Errorf("card deveria estar em Code Review:\n%s", out.String())
+	}
+}
+
+func TestNewErrors(t *testing.T) {
+	dir := initBoard(t)
+	var out bytes.Buffer
+
+	if err := run([]string{"new"}, dir, &out); err == nil ||
+		!strings.Contains(err.Error(), "uso:") {
+		t.Errorf("sem título deveria mostrar o uso, veio %v", err)
+	}
+	if err := run([]string{"new", "x", "--column", "inexistente"}, dir, &out); err == nil ||
+		!strings.Contains(err.Error(), "não existe") {
+		t.Errorf("coluna inválida deveria falhar, veio %v", err)
+	}
+	if err := run([]string{"new", "x", "--column"}, dir, &out); err == nil {
+		t.Error("--column sem valor deveria falhar")
+	}
+}

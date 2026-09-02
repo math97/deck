@@ -18,6 +18,8 @@ uso:
   deck            abre o board (procura .deck a partir do diretório atual)
   deck init       cria .deck com as colunas padrão
   deck ls         lista os cards por coluna, sem abrir o TUI
+  deck new "<título>" [--column <key>]
+                  cria um card (padrão: a primeira coluna do board)
   deck prompt <card>
                   imprime o prompt da coluna atual do card, já renderizado
                   (útil para mandar a um agente: deck prompt x | claude -p)
@@ -55,6 +57,8 @@ func run(args []string, cwd string, out io.Writer) error {
 		return runInit(cwd, out)
 	case "ls":
 		return runList(cwd, out)
+	case "new":
+		return runNew(args[1:], cwd, out)
 	case "prompt":
 		return runPrompt(args[1:], cwd, out)
 	case "help", "-h", "--help":
@@ -167,5 +171,51 @@ func runPrompt(args []string, cwd string, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintln(out, text)
+	return nil
+}
+
+// runNew cria um card pela linha de comando, para que um script — ou um agente
+// rodando num pane — possa alimentar o board sem abrir o TUI.
+func runNew(args []string, cwd string, out io.Writer) error {
+	var title, column string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--column", "-c":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--column exige um valor")
+			}
+			column = args[i+1]
+			i++
+		default:
+			if title == "" {
+				title = args[i]
+			}
+		}
+	}
+	if title == "" {
+		return fmt.Errorf(`uso: deck new "<título>" [--column <key>]`)
+	}
+
+	b, err := load(cwd)
+	if err != nil {
+		return err
+	}
+
+	if column == "" {
+		// Sem coluna, entra na primeira do board — o começo da esteira.
+		if len(b.Columns) == 0 {
+			return fmt.Errorf("o board não tem colunas")
+		}
+		column = b.Columns[0].Key
+	}
+	if b.Column(column) == nil {
+		return fmt.Errorf("coluna %q não existe (veja `deck ls`)", column)
+	}
+
+	card, err := b.NewCard(title, column)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s\n", card.ID)
 	return nil
 }
