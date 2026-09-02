@@ -1583,3 +1583,80 @@ func TestSoAbreHttpNoNavegador(t *testing.T) {
 		}
 	}
 }
+
+// R15: publicar review exige coluna marcada, PR no card e artefato não vazio.
+func TestRegraPublicarReviewExigeAsTresCondicoes(t *testing.T) {
+	m := newTestModel(t)
+	m.ghEnabled = true
+	card, err := m.b.NewCard("tarefa", "todo")
+	if err != nil {
+		t.Fatalf("NewCard: %v", err)
+	}
+
+	// Coluna sem post_review.
+	if _, _, err := m.reviewArtifact(card); err == nil {
+		t.Error("coluna sem post_review não deveria publicar")
+	}
+
+	if err := m.b.MoveCard(card, "code-review"); err != nil {
+		t.Fatalf("MoveCard: %v", err)
+	}
+	// Coluna certa, mas sem artefato.
+	if _, _, err := m.reviewArtifact(card); err == nil {
+		t.Error("sem artefato não deveria publicar")
+	}
+
+	if _, err := card.WriteArtifact("code-review", ""); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	if _, _, err := m.reviewArtifact(card); err == nil {
+		t.Error("artefato vazio não deveria publicar")
+	}
+
+	if _, err := card.WriteArtifact("code-review", "achei um problema"); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	if _, _, err := m.reviewArtifact(card); err != nil {
+		t.Errorf("com as três condições deveria publicar: %v", err)
+	}
+
+	// Falta o PR: a checagem é do askPostReview, não do reviewArtifact.
+	m.reload()
+	m = press(t, m, "R")
+	if m.mode == modeConfirm {
+		t.Error("card sem github_pr não deveria nem chegar à confirmação")
+	}
+}
+
+// R16: publicar pede confirmação, e o padrão é não.
+func TestRegraPublicarPedeConfirmacaoComPadraoNao(t *testing.T) {
+	m := newTestModel(t)
+	m.ghEnabled = true
+	card, _ := m.b.NewCard("tarefa", "code-review")
+	card.GitHubPR = "https://github.com/x/y/pull/1"
+	if err := card.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	card.WriteArtifact("code-review", "achei um problema")
+	m.reload()
+
+	// Navega até a coluna do card antes de pedir a publicação.
+	for i, c := range m.columns() {
+		if c.Key == "code-review" {
+			m.colIdx = i
+		}
+	}
+	m = press(t, m, "R")
+	if m.mode != modeConfirm {
+		t.Fatal("R deveria pedir confirmação")
+	}
+	if !strings.Contains(plain(m.View()), "público") {
+		t.Error("a confirmação deveria avisar que o conteúdo vai a público")
+	}
+
+	// Qualquer tecla que não seja afirmativa cancela.
+	m = press(t, m, "n")
+	if m.mode == modeConfirm {
+		t.Error("o padrão da confirmação é não")
+	}
+}

@@ -233,7 +233,20 @@ func (b *Board) ArchiveColumn(col *Column) error {
 		}
 		target = filepath.Join(dir, fmt.Sprintf("%s-%d.md", col.Key, n))
 	}
-	return os.Rename(col.Path, target)
+	if err := os.Rename(col.Path, target); err != nil {
+		return err
+	}
+
+	// A coluna sai do board em memória junto com o arquivo. Sem isso, o guard
+	// da última coluna lê uma lista velha: arquivar todas, uma a uma, passava
+	// pela verificação e deixava o board sem coluna nenhuma.
+	for i, c := range b.Columns {
+		if c.Key == col.Key {
+			b.Columns = append(b.Columns[:i], b.Columns[i+1:]...)
+			break
+		}
+	}
+	return nil
 }
 
 // ArchiveDirName guarda os cards tirados do board.
