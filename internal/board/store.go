@@ -1,0 +1,262 @@
+package board
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+// DirName é o diretório de estado, procurado a partir do cwd para cima.
+const DirName = ".deck"
+
+// Find sobe a árvore de diretórios procurando .deck, como o git faz com .git.
+func Find(start string) (string, error) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	for {
+		candidate := filepath.Join(dir, DirName)
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("nenhum %s encontrado a partir de %s (rode `deck init`)", DirName, start)
+		}
+		dir = parent
+	}
+}
+
+// Load lê o board inteiro do disco. Erros de arquivos individuais viram
+// entradas em Errors em vez de abortar: um card quebrado não pode esconder os
+// outros vinte.
+func Load(root string) (*Board, error) {
+	b := &Board{Root: root}
+
+	if err := loadColumns(b); err != nil {
+		return nil, err
+	}
+	if err := loadCards(b); err != nil {
+		return nil, err
+	}
+	reconcile(b)
+	return b, nil
+}
+
+func loadColumns(b *Board) error {
+	dir := b.ColumnsDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("lendo colunas em %s: %w", dir, err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			b.addError("coluna %s: %v", e.Name(), err)
+			continue
+		}
+		doc, err := ParseDoc(raw)
+		if err != nil {
+			b.addError("coluna %s: %v", e.Name(), err)
+			continue
+		}
+
+		key := strings.TrimSuffix(e.Name(), ".md")
+		title := doc.GetString("title")
+		if title == "" {
+			title = key
+		}
+		b.Columns = append(b.Columns, &Column{
+			Key:       key,
+			Path:      path,
+			Title:     title,
+			Order:     atoiOr(doc.GetString("order"), 999),
+			AgentKind: doc.GetString("agent_kind"),
+			WIPLimit:  atoiOr(doc.GetString("wip_limit"), 0),
+			Prompt:    strings.TrimSpace(doc.Body),
+			doc:       doc,
+		})
+	}
+
+	sort.SliceStable(b.Columns, func(i, j int) bool {
+		if b.Columns[i].Order != b.Columns[j].Order {
+			return b.Columns[i].Order < b.Columns[j].Order
+		}
+		return b.Columns[i].Key < b.Columns[j].Key
+	})
+
+	if len(b.Columns) == 0 {
+		b.addError("nenhuma coluna em %s", dir)
+	}
+	return nil
+}
+
+func loadCards(b *Board) error {
+	dir := b.CardsDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // board sem cards ainda é um board válido
+		}
+		return fmt.Errorf("lendo cards em %s: %w", dir, err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			b.addError("card %s: %v", e.Name(), err)
+			continue
+		}
+		doc, err := ParseDoc(raw)
+		if err != nil {
+			b.addError("card %s: %v", e.Name(), err)
+			continue
+		}
+
+		stem := strings.TrimSuffix(e.Name(), ".md")
+		id := doc.GetString("id")
+		if id == "" {
+			id = stem
+		}
+		title := doc.GetString("title")
+		if title == "" {
+			title = stem
+		}
+
+		card := &Card{
+			ID:      id,
+			Path:    path,
+			Title:   title,
+			Column:  doc.GetString("column"),
+			Order:   atoiOr(doc.GetString("order"), 0),
+			Created: parseTimeOr(doc.GetString("created"), time.Time{}),
+			Updated: parseTimeOr(doc.GetString("updated"), time.Time{}),
+			Body:    doc.Body,
+			doc:     doc,
+		}
+		if name := doc.GetString("agent_name"); name != "" {
+			card.Agent = &AgentRef{
+				Name: name,
+				Pane: doc.GetString("agent_pane"),
+				Kind: doc.GetString("agent_kind"),
+			}
+		}
+		b.Cards = append(b.Cards, card)
+	}
+	return nil
+}
+
+// reconcile move para a coluna órfã todo card que aponta para uma key que não
+// existe mais, e registra o problema.
+func reconcile(b *Board) {
+	valid := map[string]bool{}
+	for _, c := range b.Columns {
+		valid[c.Key] = true
+	}
+
+	orphans := 0
+	for _, card := range b.Cards {
+		if card.Column == "" || !valid[card.Column] {
+			orphans++
+			card.Column = OrphanColumn
+		}
+	}
+	if orphans > 0 {
+		b.Columns = append(b.Columns, &Column{
+			Key:   OrphanColumn,
+			Title: "? sem coluna",
+			Order: 100000,
+		})
+		b.addError("%d card(s) apontam para uma coluna inexistente", orphans)
+	}
+}
+
+// Save grava um card no disco, sincronizando o frontmatter com a struct.
+func (c *Card) Save() error {
+	if c.doc == nil {
+		c.doc = &Doc{}
+	}
+	c.doc.SetString("id", c.ID)
+	c.doc.SetString("title", c.Title)
+	c.doc.SetString("column", c.Column)
+	c.doc.SetInt("order", c.Order)
+	if !c.Created.IsZero() {
+		c.doc.SetString("created", c.Created.Format(time.RFC3339))
+	}
+	c.doc.SetString("updated", c.Updated.Format(time.RFC3339))
+
+	if c.Agent != nil {
+		c.doc.SetString("agent_name", c.Agent.Name)
+		c.doc.SetString("agent_pane", c.Agent.Pane)
+		c.doc.SetString("agent_kind", c.Agent.Kind)
+	} else {
+		c.doc.Delete("agent_name")
+		c.doc.Delete("agent_pane")
+		c.doc.Delete("agent_kind")
+	}
+
+	c.doc.Body = c.Body
+	out, err := c.doc.Bytes()
+	if err != nil {
+		return err
+	}
+	return writeAtomic(c.Path, out)
+}
+
+// Save grava uma coluna no disco.
+func (c *Column) Save() error {
+	if c.doc == nil {
+		c.doc = &Doc{}
+	}
+	c.doc.SetString("title", c.Title)
+	c.doc.SetInt("order", c.Order)
+	if c.AgentKind != "" {
+		c.doc.SetString("agent_kind", c.AgentKind)
+	}
+	if c.WIPLimit > 0 {
+		c.doc.SetInt("wip_limit", c.WIPLimit)
+	} else {
+		c.doc.Delete("wip_limit")
+	}
+
+	c.doc.Body = c.Prompt
+	out, err := c.doc.Bytes()
+	if err != nil {
+		return err
+	}
+	return writeAtomic(c.Path, out)
+}
+
+// writeAtomic escreve via arquivo temporário + rename, para que uma falha no
+// meio da gravação não deixe um card truncado no disco.
+func writeAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".deck-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
