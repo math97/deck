@@ -153,6 +153,33 @@ pane do agente.
 Fora de uma sessão do herdr o board funciona igual; `s` e `f` avisam em vez de
 tentar. O deck nunca dirige uma sessão de fora dela.
 
+## Quando o agente termina
+
+O deck detecta a transição para `done` e fecha o loop. Duas coisas distintas:
+
+| | quem escreve | o que é |
+|---|---|---|
+| `<coluna>.md` | **o agente** | a entrega — o refinamento, o plano, o resultado |
+| `<coluna>.session.md` | o deck | transcrição do pane, **só se a entrega não veio** |
+
+O deck **nunca** sobrescreve a entrega do agente com transcrição de terminal.
+Ele tira um retrato do artefato antes de disparar; se o arquivo mudou, a
+entrega veio e só entra uma linha no `## Log`:
+
+```
+- 2026-09-01 16:40 · agente terminou · refine.md gravado (2.1 KB)
+```
+
+Se o agente terminou sem gravar — travou, foi interrompido, ou ignorou a
+instrução — aí a transcrição é salva ao lado, e o log diz onde:
+
+```
+- 2026-09-01 16:40 · agente terminou SEM gravar refine.md · transcrição em refine.session.md
+```
+
+`herdr notification` avisa quando um agente bloqueia ou termina, para você não
+precisar estar olhando o board.
+
 ## Teclas
 
 | tecla | ação |
@@ -195,16 +222,9 @@ board assim que qualquer arquivo muda — inclusive quando um agente edita um ca
 
 ## Estado
 
-Fases 1 a 3 concluídas: board navegável, colunas e prompts editáveis, cards
-criados e movidos com log automático, artefatos por coluna com promoção
-automática a pasta, abas no detalhe, badges de PR via `gh`, e disparo e
-acompanhamento de agentes via herdr.
+As quatro fases estão concluídas: board navegável, colunas e prompts editáveis,
+cards com log automático, artefatos por coluna, badges de PR, disparo e
+acompanhamento de agentes, e captura do desfecho de volta no card.
 
-Próxima fase:
-
-4. Captura automática do resultado quando o agente fica `done`: `agent read`
-   anexa o resumo ao artefato e ao `## Log`, e `herdr notification` avisa quando
-   algo bloqueia
-
-Depois: renderização com glamour, busca, checkboxes marcáveis, e integração com
-Jira como terceira fonte ao lado do GitHub.
+Ideias para depois: renderização com glamour, busca, checkboxes marcáveis no
+TUI, e Jira como terceira fonte ao lado do GitHub.

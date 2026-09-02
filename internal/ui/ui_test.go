@@ -551,3 +551,158 @@ func TestFocusAgentWithoutAgentWarns(t *testing.T) {
 		t.Errorf("deveria avisar que não há agente, status=%q", m.status)
 	}
 }
+
+// cardWithAgent monta um card em Refine já ligado a um agente.
+func cardWithAgent(t *testing.T, m Model, title, agentName string) (Model, *board.Card) {
+	t.Helper()
+	m = press(t, m, "n")
+	m = typeText(t, m, title)
+	m = press(t, m, "enter")
+	m = press(t, m, "L") // → Refine
+
+	card := m.currentCard()
+	card.Agent = &board.AgentRef{Name: agentName, Pane: "w1:p2", Kind: "claude"}
+	if err := card.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	m.reload()
+	return m, m.currentCard()
+}
+
+func TestCaptureLogsDeliveredArtifact(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "entrega ok", "card-entrega")
+
+	next, _ := m.captured(captureMsg{
+		cardPath:  card.Path,
+		delivered: true,
+		artifact:  "/x/refine.md",
+		size:      2150,
+	})
+	m = next.(Model)
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("refine")[0]
+	if !strings.Contains(got.Body, "refine.md gravado") {
+		t.Errorf("log deveria registrar a entrega:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "2.1 KB") {
+		t.Errorf("log deveria trazer o tamanho:\n%s", got.Body)
+	}
+}
+
+func TestCaptureLogsFallbackTranscript(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "sem entrega", "card-sem")
+
+	next, _ := m.captured(captureMsg{
+		cardPath: card.Path,
+		artifact: "/x/refine.md",
+		session:  "/x/refine.session.md",
+	})
+	m = next.(Model)
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("refine")[0]
+	if !strings.Contains(got.Body, "SEM gravar refine.md") {
+		t.Errorf("log deveria dizer que a entrega não veio:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "refine.session.md") {
+		t.Errorf("log deveria apontar a transcrição:\n%s", got.Body)
+	}
+}
+
+func TestSnapshotDetectsNewArtifact(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "detecta", "card-detecta")
+
+	// Antes: o artefato não existe.
+	base := snapshotArtifact(card, "refine")
+	if base.exists {
+		t.Fatal("baseline não deveria achar artefato inexistente")
+	}
+
+	// O "agente" grava.
+	if _, err := card.WriteArtifact("refine", "o refinamento"); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	// Recalcula o path agora que o card virou pasta.
+	base.path = card.Dir + "/refine.md"
+
+	cmd := captureAgentResult(card, "card-detecta", base)
+	msg := cmd().(captureMsg)
+	if !msg.delivered {
+		t.Errorf("deveria reconhecer a entrega gravada: %+v", msg)
+	}
+	if msg.size == 0 {
+		t.Error("deveria reportar o tamanho da entrega")
+	}
+}
+
+func TestSnapshotIgnoresUnchangedArtifact(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "nao mexeu", "card-nao")
+
+	// Artefato já existia antes de o agente subir.
+	card.WriteArtifact("refine", "conteúdo antigo")
+	base := snapshotArtifact(card, "refine")
+	if !base.exists {
+		t.Fatal("baseline deveria ter registrado o artefato existente")
+	}
+
+	// O agente termina sem tocar no arquivo. Sem herdr vivo, AgentRead falha —
+	// o que importa é que NÃO foi marcado como entrega.
+	cmd := captureAgentResult(card, "card-nao", base)
+	msg := cmd().(captureMsg)
+	if msg.delivered {
+		t.Error("artefato intocado não deveria contar como entrega desta rodada")
+	}
+}
+
+func TestDetectFinishedFiresOnceOnDone(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "uma vez", "card-uma")
+
+	// working → done dispara a captura.
+	m.agents = agentsMsg{"card-uma": herdr.Agent{Name: "card-uma", Status: herdr.StatusWorking}}
+	cmds := m.detectFinished(agentsMsg{
+		"card-uma": herdr.Agent{Name: "card-uma", Status: herdr.StatusDone},
+	})
+	if len(cmds) != 1 {
+		t.Fatalf("esperava 1 captura, veio %d", len(cmds))
+	}
+
+	// done → done não dispara de novo, senão capturaria a cada 2 segundos.
+	m.agents = agentsMsg{"card-uma": herdr.Agent{Name: "card-uma", Status: herdr.StatusDone}}
+	cmds = m.detectFinished(agentsMsg{
+		"card-uma": herdr.Agent{Name: "card-uma", Status: herdr.StatusDone},
+	})
+	if len(cmds) != 0 {
+		t.Errorf("não deveria recapturar um agente que já estava done: %d", len(cmds))
+	}
+}
+
+func TestDetectFinishedNotifiesOnBlocked(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "bloqueia", "card-bloq")
+
+	m.agents = agentsMsg{"card-bloq": herdr.Agent{Name: "card-bloq", Status: herdr.StatusWorking}}
+	cmds := m.detectFinished(agentsMsg{
+		"card-bloq": herdr.Agent{Name: "card-bloq", Status: herdr.StatusBlocked},
+	})
+	if len(cmds) != 1 {
+		t.Errorf("bloquear deveria gerar uma notificação, veio %d", len(cmds))
+	}
+}
+
+func TestHumanSize(t *testing.T) {
+	for in, want := range map[int64]string{
+		512:             "512 B",
+		2150:            "2.1 KB",
+		3 * 1024 * 1024: "3.0 MB",
+	} {
+		if got := humanSize(in); got != want {
+			t.Errorf("humanSize(%d) = %q, esperava %q", in, got, want)
+		}
+	}
+}
