@@ -205,6 +205,7 @@ func (m Model) viewFooter() string {
 			inputRenameColumn: "renomear coluna",
 			inputGitHubPR:     "link do PR",
 			inputFilter:       "buscar",
+			inputImport:       "importar do GitHub",
 		}[m.inputKind]
 		return stylePrompt.Render(label+":") + " " + m.input.View()
 	}
@@ -389,6 +390,7 @@ func (m Model) viewHelp() string {
 		{"n", "novo card na coluna focada"},
 		{"d", "arquivar o card (pede confirmação)"},
 		{"u", "colar o link do PR no card"},
+		{"I", "importar uma issue ou PR do GitHub"},
 		{"/", "buscar; esc limpa o filtro"},
 		{"e", "editar o card no $EDITOR"},
 		{"", ""},

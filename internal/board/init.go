@@ -147,6 +147,9 @@ e faz o board funcionar sem configuração nenhuma.
   Precisa de ` + "`gh auth login`" + `.
 - **herdr** — disparar e acompanhar agentes. Só funciona com o deck aberto
   dentro de um pane do herdr.
+- **worktree** — cada agente trabalha num checkout e branch próprios
+  (` + "`deck/<card-id>`" + `), sem disputar a árvore com você. Em ` + "`auto`" + `, usa worktree
+  quando o diretório é um repositório git e cai no modo simples quando não é.
 - **github_auto_post** — publica o review no PR sem perguntar. Desligado por
   padrão: comentar num PR é público e não dá para desfazer direito, então cada
   publicação passa por uma confirmação até você dizer o contrário.

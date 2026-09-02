@@ -69,6 +69,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentReleasedMsg:
 		return m.agentReleased(msg)
 
+	case importedMsg:
+		return m.imported(msg)
+
+	case focusFailedMsg:
+		m.setStatus(false, "não foi possível focar o agente: %v", msg.err)
+		return m, clearStatusCmd()
+
+	case browserFailedMsg:
+		m.setStatus(false, "não foi possível abrir o browser: %v", msg.err)
+		return m, clearStatusCmd()
+
 	case clearStatusMsg:
 		m.status = ""
 		return m, nil
@@ -176,6 +187,14 @@ func (m Model) commitInput(value string) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(pollGitHub(m.b.Cards), clearStatusCmd())
 		}
 		return m, clearStatusCmd()
+
+	case inputImport:
+		col := m.currentColumn()
+		if col == nil {
+			return m, nil
+		}
+		m.setStatus(true, "buscando no GitHub…")
+		return m, importFromGitHub(strings.TrimSpace(value), col.Key)
 
 	case inputFilter:
 		m.filter = strings.TrimSpace(value)
@@ -310,6 +329,18 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.Placeholder = "https://github.com/org/repo/pull/123"
 		m.input.SetValue(card.GitHubPR)
 		m.input.CursorEnd()
+		m.input.Focus()
+		return m, nil
+
+	case "I":
+		if !m.ghEnabled {
+			m.setStatus(false, "GitHub desligado — veja github no .deck/config.md")
+			return m, clearStatusCmd()
+		}
+		m.inputKind = inputImport
+		m.mode = modeInput
+		m.input.Placeholder = "URL da issue ou do PR"
+		m.input.SetValue("")
 		m.input.Focus()
 		return m, nil
 
@@ -478,8 +509,13 @@ func (m Model) startAgentForCard() (tea.Model, tea.Cmd) {
 	base := snapshotArtifact(card, col.Key)
 	m.pendingBaseline = base
 
-	m.setStatus(true, "subindo agente para %s…", card.Title)
-	return m, startAgent(m.b, card, col, taken)
+	useWorktree := m.worktreeEnabled()
+	where := "subindo agente para %s…"
+	if useWorktree {
+		where = "criando worktree e subindo agente para %s…"
+	}
+	m.setStatus(true, where, card.Title)
+	return m, startAgent(m.b, card, col, taken, useWorktree)
 }
 
 // agentStarted registra no card o agente que subiu.
@@ -496,7 +532,7 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(false, "%v", msg.err)
 		// Mesmo com erro no prompt, o agente pode ter subido: registra o que há.
 		if card != nil && msg.agent != nil {
-			m.linkAgent(card, msg.agent)
+			m.linkAgent(card, msg.agent, msg.workspace, msg.worktree)
 		}
 		return m, clearStatusCmd()
 	}
@@ -504,7 +540,7 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 		return m, clearStatusCmd()
 	}
 
-	m.linkAgent(card, msg.agent)
+	m.linkAgent(card, msg.agent, msg.workspace, msg.worktree)
 	if m.pendingBaseline.path == "" {
 		m.pendingBaseline = snapshotArtifact(card, card.Column)
 	}
@@ -516,13 +552,20 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 }
 
 // linkAgent grava a ligação card ↔ agente no frontmatter e no log.
-func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent) {
+func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent, workspace, worktree string) {
 	card.Agent = &board.AgentRef{
-		Name: agent.Name,
-		Pane: agent.PaneID,
-		Kind: agent.Kind,
+		Name:      agent.Name,
+		Pane:      agent.PaneID,
+		Kind:      agent.Kind,
+		Workspace: workspace,
+		Worktree:  worktree,
 	}
-	card.AppendLog("agente `%s` iniciado em %s", agent.Name, agent.PaneID)
+	if worktree != "" {
+		card.AppendLog("agente `%s` iniciado em %s, worktree %s",
+			agent.Name, agent.PaneID, worktree)
+	} else {
+		card.AppendLog("agente `%s` iniciado em %s", agent.Name, agent.PaneID)
+	}
 	if err := card.Save(); err != nil {
 		m.setStatus(false, "salvando card: %v", err)
 		return
@@ -550,7 +593,9 @@ func (m Model) focusAgent() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = herdr.AgentFocus(ctx, name)
+		if err := herdr.AgentFocus(ctx, name); err != nil {
+			return focusFailedMsg{err: err}
+		}
 		return nil
 	}
 }
@@ -759,10 +804,17 @@ func (m Model) askReleaseAgent() (tea.Model, tea.Cmd) {
 		warn = " — ELE AINDA ESTÁ TRABALHANDO"
 	}
 
+	question := "Fechar o pane do agente?"
+	detail := agent.Name + " · " + agent.Pane
+	if agent.Worktree != "" {
+		question = "Fechar o pane e remover a worktree?"
+		detail += " · " + agent.Worktree + " (recusa se houver trabalho não commitado)"
+	}
+
 	m.mode = modeConfirm
 	m.confirm = confirmState{
-		question: "Fechar o pane do agente?" + warn,
-		detail:   agent.Name + " · " + agent.Pane,
+		question: question + warn,
+		detail:   detail,
 		action: func(mm Model) (tea.Model, tea.Cmd) {
 			return mm, releaseAgent(card, agent)
 		},
@@ -774,10 +826,24 @@ func (m Model) askReleaseAgent() (tea.Model, tea.Cmd) {
 func releaseAgent(card *board.Card, agent board.AgentRef) tea.Cmd {
 	cardPath := card.Path
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		err := herdr.PaneClose(ctx, agent.Pane)
-		return agentReleasedMsg{cardPath: cardPath, name: agent.Name, err: err}
+
+		if err := herdr.PaneClose(ctx, agent.Pane); err != nil {
+			return agentReleasedMsg{cardPath: cardPath, name: agent.Name, err: err}
+		}
+
+		// A worktree sai depois do pane, e sem --force: com trabalho não
+		// commitado o herdr recusa, e recusar é o comportamento certo.
+		msg := agentReleasedMsg{cardPath: cardPath, name: agent.Name}
+		if agent.Workspace != "" {
+			if err := herdr.WorktreeRemove(ctx, agent.Workspace); err != nil {
+				msg.worktreeErr = err
+			} else {
+				msg.worktree = agent.Worktree
+			}
+		}
+		return msg
 	}
 }
 
@@ -803,8 +869,25 @@ func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
 	delete(m.baselines, msg.name)
 
 	m.reload()
-	m.setStatus(true, "agente %s liberado", msg.name)
+	switch {
+	case msg.worktreeErr != nil:
+		m.setStatus(false, "pane fechado, mas a worktree ficou: %v", msg.worktreeErr)
+	case msg.worktree != "":
+		m.setStatus(true, "agente %s liberado e worktree removida", msg.name)
+	default:
+		m.setStatus(true, "agente %s liberado", msg.name)
+	}
 	return m, clearStatusCmd()
+}
+
+// worktreeEnabled resolve o interruptor de worktree da config.
+func (m *Model) worktreeEnabled() bool {
+	if m.b.Config == nil {
+		return true
+	}
+	// Em "auto" a decisão final é do startAgent, que checa se há repositório
+	// git; aqui só respeitamos um "off" explícito.
+	return m.b.Config.Worktree != board.ToggleOff
 }
 
 // askArchiveColumn tira a coluna do board, com confirmação.
@@ -843,4 +926,34 @@ func (m Model) askArchiveColumn() (tea.Model, tea.Cmd) {
 		},
 	}
 	return m, nil
+}
+
+// imported cria o card a partir do que veio do GitHub.
+func (m Model) imported(msg importedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.setStatus(false, "%v", msg.err)
+		return m, clearStatusCmd()
+	}
+
+	card, err := m.b.NewCardFromSource(
+		msg.item.Title, msg.column, msg.item.URL, msg.item.Body, msg.item.IsPR)
+	if err != nil {
+		m.setStatus(false, "%v", err)
+		return m, clearStatusCmd()
+	}
+
+	m.reload()
+	for i, c := range m.currentCards() {
+		if c.Path == card.Path {
+			m.cardIdx = i
+			break
+		}
+	}
+
+	kind := "issue"
+	if msg.item.IsPR {
+		kind = "PR"
+	}
+	m.setStatus(true, "%s #%d importado: %s", kind, msg.item.Number, card.Title)
+	return m, tea.Batch(pollGitHub(m.b.Cards), clearStatusCmd())
 }

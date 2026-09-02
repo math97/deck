@@ -135,6 +135,7 @@ Variáveis disponíveis: `{{card_path}}`, `{{card_dir}}`, `{{card_id}}`,
 ---
 github: auto          # on | off | auto
 herdr: auto           # on | off | auto
+worktree: auto        # on | off | auto
 github_auto_post: off # publicar review no PR sem perguntar
 ---
 ```
@@ -181,8 +182,9 @@ frontmatter dela.
 Com o deck aberto **dentro de um pane do [herdr](https://herdr.dev)**, `s` num
 card dispara um agente:
 
-1. `pane split --no-focus` — direção escolhida pela geometria do pane, como o
-   herdr recomenda: pane largo divide à direita, estreito divide para baixo
+1. `worktree create --branch deck/<card-id> --no-focus` — um checkout e branch
+   só desse card, com workspace e pane próprios. Sem repositório git, cai num
+   `pane split` no diretório atual
 2. `agent start card-<id> --kind <agent_kind da coluna>`
 3. `agent prompt` com o prompt da coluna já renderizado, artefatos anteriores
    incluídos
@@ -227,6 +229,14 @@ instrução — aí a transcrição é salva ao lado, e o log diz onde:
 `herdr notification` avisa quando um agente bloqueia ou termina, para você não
 precisar estar olhando o board.
 
+## Importar do GitHub
+
+`I` traz uma issue ou PR para o board: cole a URL e o deck cria o card com o
+título, a descrição original numa seção própria, e o link já no frontmatter.
+
+A distinção entre issue e PR vem da URL que o `gh` **devolve**, não da que você
+digitou — o GitHub canonicaliza, e uma URL `/issues/123` pode ser um PR.
+
 ## Teclas
 
 | tecla | ação |
@@ -251,6 +261,7 @@ precisar estar olhando o board.
 | `<` `>` | reordenar a coluna |
 | `d` | arquivar o card (pede confirmação) |
 | `u` | colar o link do PR no card |
+| `I` | importar uma issue ou PR do GitHub |
 | `/` | buscar em título, id e corpo; `esc` limpa |
 | `c` | fechar o pane do agente (pede confirmação) |
 | `x` | arquivar a coluna (pede confirmação; só se estiver vazia) |

@@ -2,7 +2,9 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,16 +25,27 @@ type agentTickMsg struct{}
 
 // agentReleasedMsg é o resultado de fechar o pane de um agente.
 type agentReleasedMsg struct {
-	cardPath string
-	name     string
-	err      error
+	cardPath    string
+	name        string
+	worktree    string // removida com sucesso
+	worktreeErr error  // pane fechou, mas a worktree ficou
+	err         error
 }
 
 // agentStartedMsg é o resultado de disparar um agente para um card.
 type agentStartedMsg struct {
-	cardPath string
-	agent    *herdr.Agent
-	err      error
+	cardPath  string
+	agent     *herdr.Agent
+	workspace string // preenchido quando o agente ganhou worktree própria
+	worktree  string
+	err       error
+}
+
+// insideGitRepo diz se o diretório está sob controle do git. Sem repositório
+// não há worktree possível, e o disparo cai no modo simples em vez de falhar.
+func insideGitRepo(dir string) bool {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--git-dir")
+	return cmd.Run() == nil
 }
 
 // pollAgents consulta os agentes vivos na sessão do herdr.
@@ -65,7 +78,7 @@ func scheduleAgentPoll() tea.Cmd {
 // Roda inteiro fora da goroutine da UI: `agent start` só retorna quando o herdr
 // detecta o agente pronto, o que pode levar dezenas de segundos, e o board não
 // pode congelar nesse meio-tempo.
-func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[string]bool) tea.Cmd {
+func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[string]bool, useWorktree bool) tea.Cmd {
 	return func() tea.Msg {
 		fail := func(err error) tea.Msg {
 			return agentStartedMsg{cardPath: card.Path, err: err}
@@ -76,18 +89,41 @@ func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[s
 			return fail(err)
 		}
 
-		// Renderiza o prompt antes de mexer no layout: se a coluna não tiver
-		// prompt, nada é criado.
-		prompt, err := b.RenderPrompt(card, col, cwd)
-		if err != nil {
-			return fail(err)
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		direction := herdr.SplitDirection(ctx, herdr.PaneID())
-		pane, err := herdr.PaneSplit(ctx, cwd, direction)
+		// Onde o agente vai trabalhar. Com worktree, um checkout e um branch
+		// só dele; sem, um pane irmão no diretório atual.
+		var (
+			paneID    string
+			workDir   = cwd
+			workspace string
+			worktree  string
+		)
+
+		if useWorktree && insideGitRepo(cwd) {
+			wt, err := herdr.WorktreeCreate(ctx, cwd, herdr.BranchName(card.ID), card.Title)
+			if err != nil {
+				return fail(fmt.Errorf("criando worktree: %w", err))
+			}
+			paneID = wt.RootPane.PaneID
+			workspace = wt.WorkspaceID
+			worktree = wt.Worktree.Path
+			if worktree != "" {
+				workDir = worktree
+			}
+		} else {
+			direction := herdr.SplitDirection(ctx, herdr.PaneID())
+			pane, err := herdr.PaneSplit(ctx, cwd, direction)
+			if err != nil {
+				return fail(err)
+			}
+			paneID = pane.PaneID
+		}
+
+		// O prompt é renderizado com o diretório em que o agente de fato vai
+		// trabalhar, senão {{cwd}} apontaria para a árvore errada.
+		prompt, err := b.RenderPrompt(card, col, workDir)
 		if err != nil {
 			return fail(err)
 		}
@@ -98,16 +134,20 @@ func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[s
 		}
 		name := herdr.AgentName(card.ID, taken)
 
-		agent, err := herdr.AgentStart(ctx, name, kind, pane.PaneID)
+		agent, err := herdr.AgentStart(ctx, name, kind, paneID)
 		if err != nil {
-			// O pane já existe e o nome segue utilizável; devolvemos o erro
-			// para o usuário decidir, sem destruir o que foi criado.
+			// O que foi criado continua de pé e o nome segue utilizável:
+			// devolvemos o erro para o usuário decidir, sem destruir nada.
 			return fail(err)
 		}
 
-		if err := herdr.AgentPrompt(ctx, name, prompt); err != nil {
-			return agentStartedMsg{cardPath: card.Path, agent: agent, err: err}
+		msg := agentStartedMsg{
+			cardPath: card.Path, agent: agent,
+			workspace: workspace, worktree: worktree,
 		}
-		return agentStartedMsg{cardPath: card.Path, agent: agent}
+		if err := herdr.AgentPrompt(ctx, name, prompt); err != nil {
+			msg.err = err
+		}
+		return msg
 	}
 }

@@ -4,6 +4,9 @@ Board kanban dentro do terminal, em Go. Colunas e cards são arquivos markdown;
 o TUI é uma view descartável sobre eles. Integra com o [herdr](https://herdr.dev)
 para disparar e acompanhar agentes, e com o `gh` para estado de PR.
 
+Padrões de Go, com exemplos deste código: [`docs/go-patterns.md`](docs/go-patterns.md).
+Instruções para agentes disparados pelo board: [`AGENTS.md`](AGENTS.md).
+
 ## Comandos
 
 ```sh
@@ -98,6 +101,16 @@ falha mesmo com o texto na tela.
 Para inspecionar visualmente, escreva um teste temporário que monte o `Model`,
 fixe `width`/`height` e imprima `m.View()`. Não tente capturar o TUI num PTY —
 o Bubble Tea segura o stdin e trava.
+
+## Worktree
+
+Com `worktree: auto` (padrão), `s` cria um checkout e branch próprios do card
+(`deck/<card-id>`) via `herdr worktree create`, que já devolve workspace, aba e
+pane — não é preciso `pane split`. Sem repositório git, cai no split simples.
+
+`c` fecha o pane e remove a worktree **sem `--force`**: com trabalho não
+commitado o herdr recusa, e recusar é o certo. Descartar checkout sujo é decisão
+do usuário, fora do deck.
 
 ## Idioma
 

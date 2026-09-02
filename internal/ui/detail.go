@@ -128,6 +128,11 @@ func (m Model) openPR(card *board.Card) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(openBrowser(url), clearStatusCmd())
 }
 
+// focusFailedMsg e browserFailedMsg levam à barra de status falhas que antes
+// eram engolidas: sem elas, apertar a tecla parecia não fazer nada.
+type focusFailedMsg struct{ err error }
+type browserFailedMsg struct{ err error }
+
 // openBrowser abre uma URL no navegador padrão do sistema.
 func openBrowser(url string) tea.Cmd {
 	return func() tea.Msg {
@@ -140,7 +145,9 @@ func openBrowser(url string) tea.Cmd {
 		default:
 			cmd = exec.Command("xdg-open", url)
 		}
-		_ = cmd.Start()
+		if err := cmd.Start(); err != nil {
+			return browserFailedMsg{err: err}
+		}
 		return nil
 	}
 }

@@ -178,9 +178,11 @@ func loadCards(b *Board) error {
 		}
 		if name := doc.GetString("agent_name"); name != "" {
 			card.Agent = &AgentRef{
-				Name: name,
-				Pane: doc.GetString("agent_pane"),
-				Kind: doc.GetString("agent_kind"),
+				Name:      name,
+				Pane:      doc.GetString("agent_pane"),
+				Kind:      doc.GetString("agent_kind"),
+				Workspace: doc.GetString("agent_workspace"),
+				Worktree:  doc.GetString("worktree_path"),
 			}
 		}
 		if cardDir != "" {
@@ -271,10 +273,13 @@ func (c *Card) Save() error {
 		c.doc.SetString("agent_name", c.Agent.Name)
 		c.doc.SetString("agent_pane", c.Agent.Pane)
 		c.doc.SetString("agent_kind", c.Agent.Kind)
+		setOrDelete(c.doc, "agent_workspace", c.Agent.Workspace)
+		setOrDelete(c.doc, "worktree_path", c.Agent.Worktree)
 	} else {
-		c.doc.Delete("agent_name")
-		c.doc.Delete("agent_pane")
-		c.doc.Delete("agent_kind")
+		for _, k := range []string{"agent_name", "agent_pane", "agent_kind",
+			"agent_workspace", "worktree_path"} {
+			c.doc.Delete(k)
+		}
 	}
 
 	c.doc.Body = c.Body

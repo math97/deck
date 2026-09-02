@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -206,4 +207,75 @@ func PostComment(ctx context.Context, prURL, bodyFile string) (string, error) {
 	}
 	// O gh imprime a URL do comentário; se mudar, o vazio não atrapalha.
 	return strings.TrimSpace(string(out)), nil
+}
+
+// Item é uma issue ou pull request trazido do GitHub para virar card.
+type Item struct {
+	Number int
+	Title  string
+	Body   string
+	State  string
+	URL    string
+	IsPR   bool
+}
+
+// prPathRe reconhece a URL de um pull request; o resto é tratado como issue.
+var prPathRe = regexp.MustCompile(`/pull/\d+`)
+
+// Import busca uma issue ou PR pela URL.
+//
+// Usa `gh issue view`, que atende os dois: para uma URL de PR o gh devolve os
+// mesmos campos. Assim não é preciso adivinhar o tipo antes de perguntar.
+func Import(ctx context.Context, url string) (*Item, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return nil, fmt.Errorf("url vazia")
+	}
+	if !strings.Contains(url, "/") {
+		return nil, fmt.Errorf("informe a URL completa da issue ou do PR")
+	}
+
+	cmd := exec.CommandContext(ctx, "gh", "issue", "view", url,
+		"--json", "number,title,body,state,url")
+	out, err := cmd.Output()
+	if err != nil {
+		var stderr string
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = strings.TrimSpace(string(ee.Stderr))
+		}
+		if stderr == "" {
+			stderr = err.Error()
+		}
+		return nil, fmt.Errorf("gh: %s", firstLine(stderr))
+	}
+
+	var p struct {
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		Body   string `json:"body"`
+		State  string `json:"state"`
+		URL    string `json:"url"`
+	}
+	if err := json.Unmarshal(out, &p); err != nil {
+		return nil, fmt.Errorf("gh: json inválido: %w", err)
+	}
+
+	final := p.URL
+	if final == "" {
+		final = url
+	}
+	return &Item{
+		Number: p.Number,
+		Title:  p.Title,
+		Body:   normalizeBody(p.Body),
+		State:  p.State,
+		URL:    final,
+		IsPR:   prPathRe.MatchString(final),
+	}, nil
+}
+
+// normalizeBody troca CRLF por LF. O GitHub devolve CRLF, e ele apareceria
+// como lixo no markdown do card.
+func normalizeBody(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
