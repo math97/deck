@@ -40,6 +40,12 @@ func Find(start string) (string, error) {
 func Load(root string) (*Board, error) {
 	b := &Board{Root: root}
 
+	cfg, err := loadConfig(root)
+	if err != nil {
+		b.addError("config: %v", err)
+	}
+	b.Config = cfg
+
 	if err := loadColumns(b); err != nil {
 		return nil, err
 	}
@@ -79,14 +85,15 @@ func loadColumns(b *Board) error {
 			title = key
 		}
 		b.Columns = append(b.Columns, &Column{
-			Key:       key,
-			Path:      path,
-			Title:     title,
-			Order:     atoiOr(doc.GetString("order"), 999),
-			AgentKind: doc.GetString("agent_kind"),
-			WIPLimit:  atoiOr(doc.GetString("wip_limit"), 0),
-			Prompt:    strings.TrimSpace(doc.Body),
-			doc:       doc,
+			Key:        key,
+			Path:       path,
+			Title:      title,
+			Order:      atoiOr(doc.GetString("order"), 999),
+			AgentKind:  doc.GetString("agent_kind"),
+			WIPLimit:   atoiOr(doc.GetString("wip_limit"), 0),
+			Prompt:     strings.TrimSpace(doc.Body),
+			PostReview: parseBool(doc.GetString("post_review")),
+			doc:        doc,
 		})
 	}
 
@@ -292,6 +299,11 @@ func (c *Column) Save() error {
 		c.doc.SetInt("wip_limit", c.WIPLimit)
 	} else {
 		c.doc.Delete("wip_limit")
+	}
+	if c.PostReview {
+		c.doc.SetString("post_review", "on")
+	} else {
+		c.doc.Delete("post_review")
 	}
 
 	c.doc.Body = c.Prompt

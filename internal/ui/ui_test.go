@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -703,6 +705,130 @@ func TestHumanSize(t *testing.T) {
 	} {
 		if got := humanSize(in); got != want {
 			t.Errorf("humanSize(%d) = %q, esperava %q", in, got, want)
+		}
+	}
+}
+
+func TestConfigOffDisablesGitHub(t *testing.T) {
+	dir := t.TempDir()
+	root, _, _ := board.Init(dir)
+	os.WriteFile(filepath.Join(root, board.ConfigFileName),
+		[]byte("---\ngithub: off\nherdr: off\n---\n"), 0o644)
+
+	b, _ := board.Load(root)
+	m := New(b)
+	m.width, m.height = 160, 40
+
+	if m.ghEnabled {
+		t.Error("github: off deveria desligar a integração")
+	}
+	if m.herdrInside {
+		t.Error("herdr: off deveria desligar a integração")
+	}
+	// E o rodapé não deve oferecer o que está desligado.
+	out := m.View()
+	if strings.Contains(out, "R review") || strings.Contains(out, "s agente") {
+		t.Errorf("rodapé não deveria oferecer integração desligada:\n%s", out)
+	}
+}
+
+func TestPostReviewAsksConfirmation(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "revisar")
+	m = press(t, m, "enter")
+	// todo → refine → in-progress → code-review
+	m = press(t, m, "L", "L", "L")
+	if got := m.currentColumn().Key; got != "code-review" {
+		t.Fatalf("esperava code-review, está em %q", got)
+	}
+
+	card := m.currentCard()
+	card.GitHubPR = "https://github.com/org/repo/pull/7"
+	card.Save()
+	card.WriteArtifact("code-review", "# Review\n\nestá bom para merge.\n")
+	m.reload()
+
+	m.ghEnabled = true
+	m = press(t, m, "R")
+
+	if m.mode != modeConfirm {
+		t.Fatalf("publicar no PR deveria pedir confirmação, mode=%v", m.mode)
+	}
+	if !strings.Contains(m.View(), "org/repo#7") {
+		t.Errorf("a confirmação deveria dizer em qual PR vai publicar:\n%s", m.View())
+	}
+
+	// Qualquer tecla que não seja afirmativa cancela.
+	m = press(t, m, "n")
+	if m.mode != modeNormal || m.statusOK {
+		t.Error("tecla não afirmativa deveria cancelar")
+	}
+}
+
+func TestPostReviewRefusedOutsideReviewColumn(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+	m.ghEnabled = true
+
+	m = press(t, m, "R") // ainda em To Do
+	if m.statusOK || !strings.Contains(m.status, "não publica review") {
+		t.Errorf("deveria recusar fora da coluna de review, status=%q", m.status)
+	}
+}
+
+func TestPostReviewRefusedWithoutArtifact(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "sem review")
+	m = press(t, m, "enter")
+	m = press(t, m, "L", "L", "L")
+
+	card := m.currentCard()
+	card.GitHubPR = "https://github.com/org/repo/pull/7"
+	card.Save()
+	m.reload()
+	m.ghEnabled = true
+
+	m = press(t, m, "R")
+	if m.statusOK || !strings.Contains(m.status, "ainda não há review") {
+		t.Errorf("deveria recusar sem artefato, status=%q", m.status)
+	}
+}
+
+func TestReviewPostedLogsToCard(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "publicado")
+	m = press(t, m, "enter")
+	card := m.currentCard()
+
+	next, _ := m.reviewPosted(reviewPostedMsg{
+		cardPath: card.Path,
+		url:      "https://github.com/org/repo/pull/7#issuecomment-1",
+	})
+	m = next.(Model)
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("todo")[0]
+	if !strings.Contains(got.Body, "review publicado") {
+		t.Errorf("log deveria registrar a publicação:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "issuecomment-1") {
+		t.Errorf("log deveria guardar a URL do comentário:\n%s", got.Body)
+	}
+}
+
+func TestShortPR(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/org/repo/pull/123":  "org/repo#123",
+		"https://github.com/org/repo/pull/123/": "org/repo#123",
+		"nao-e-url":                             "nao-e-url",
+	} {
+		if got := shortPR(in); got != want {
+			t.Errorf("shortPR(%q) = %q, esperava %q", in, got, want)
 		}
 	}
 }

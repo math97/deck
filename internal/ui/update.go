@@ -55,6 +55,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case captureMsg:
 		return m.captured(msg)
 
+	case reviewPostedMsg:
+		return m.reviewPosted(msg)
+
 	case clearStatusMsg:
 		m.status = ""
 		return m, nil
@@ -65,6 +68,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateInput(msg)
 		case modeDetail:
 			return m.updateDetail(msg)
+		case modeConfirm:
+			return m.updateConfirm(msg)
 		case modeHelp:
 			switch msg.String() {
 			case "esc", "q", "enter", "?":
@@ -241,6 +246,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "f":
 		return m.focusAgent()
+
+	case "R":
+		return m.askPostReview()
 
 	// --- colunas ---
 	case "p":
@@ -598,5 +606,25 @@ func humanSize(n int64) string {
 		return fmt.Sprintf("%.1f KB", float64(n)/1024)
 	default:
 		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
+}
+
+// updateConfirm trata a pergunta sim/não. O padrão é NÃO: qualquer tecla que
+// não seja uma aceitação explícita cancela.
+func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "s", "Y", "S", "enter":
+		action := m.confirm.action
+		m.mode = modeNormal
+		m.confirm = confirmState{}
+		if action != nil {
+			return action(m)
+		}
+		return m, nil
+	default:
+		m.mode = modeNormal
+		m.confirm = confirmState{}
+		m.setStatus(false, "cancelado")
+		return m, clearStatusCmd()
 	}
 }

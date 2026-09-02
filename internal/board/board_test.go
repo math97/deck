@@ -24,10 +24,10 @@ func setup(t *testing.T) *Board {
 
 func TestInitCreatesDefaultColumns(t *testing.T) {
 	b := setup(t)
-	if len(b.Columns) != 5 {
-		t.Fatalf("esperava 5 colunas, veio %d", len(b.Columns))
+	if len(b.Columns) != 6 {
+		t.Fatalf("esperava 6 colunas, veio %d", len(b.Columns))
 	}
-	want := []string{"todo", "refine", "in-progress", "qa", "done"}
+	want := []string{"todo", "refine", "in-progress", "code-review", "qa", "done"}
 	for i, key := range want {
 		if b.Columns[i].Key != key {
 			t.Errorf("coluna %d: esperava %q, veio %q", i, key, b.Columns[i].Key)
@@ -39,6 +39,12 @@ func TestInitCreatesDefaultColumns(t *testing.T) {
 	if !b.Column("refine").HasPrompt() {
 		t.Error("Refine deveria ter prompt")
 	}
+	if !b.Column("code-review").PostReview {
+		t.Error("Code Review deveria estar marcada para publicar no PR")
+	}
+	if b.Column("qa").PostReview {
+		t.Error("só Code Review deveria publicar no PR")
+	}
 }
 
 func TestInitIsIdempotent(t *testing.T) {
@@ -47,8 +53,9 @@ func TestInitIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	if len(created) != 5 {
-		t.Fatalf("primeira execução deveria criar 5, criou %d", len(created))
+	// 6 colunas + config.md
+	if len(created) != 7 {
+		t.Fatalf("primeira execução deveria criar 7, criou %d", len(created))
 	}
 
 	// Edita uma coluna e roda init de novo: o conteúdo do usuário sobrevive.
@@ -195,7 +202,7 @@ func TestShiftColumnReorders(t *testing.T) {
 	}
 
 	b2, _ := Load(b.Root)
-	want := []string{"todo", "refine", "qa", "in-progress", "done"}
+	want := []string{"todo", "refine", "in-progress", "qa", "code-review", "done"}
 	for i, key := range want {
 		if b2.Columns[i].Key != key {
 			t.Errorf("posição %d: esperava %q, veio %q", i, key, b2.Columns[i].Key)

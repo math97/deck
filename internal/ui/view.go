@@ -26,10 +26,11 @@ func (m Model) View() string {
 		return m.viewHelp()
 	case modeDetail:
 		return m.viewDetail()
+	case modeConfirm:
+		return lipgloss.JoinVertical(lipgloss.Left, m.viewBoard(), m.viewConfirm())
+	default:
+		return lipgloss.JoinVertical(lipgloss.Left, m.viewBoard(), m.viewFooter())
 	}
-
-	body := m.viewBoard()
-	return lipgloss.JoinVertical(lipgloss.Left, body, m.viewFooter())
 }
 
 // viewBoard desenha as colunas lado a lado.
@@ -177,8 +178,21 @@ func (m Model) viewFooter() string {
 	if m.herdrInside {
 		hints += " · s agente · f pane"
 	}
+	if m.ghEnabled {
+		hints += " · R review"
+	}
 	hints += " · ? ajuda · q sair"
 	return styleStatus.Render(hints)
+}
+
+// viewConfirm desenha a pergunta no rodapé. O rótulo deixa explícito que o
+// padrão é não: só uma tecla afirmativa segue adiante.
+func (m Model) viewConfirm() string {
+	q := stylePrompt.Render(m.confirm.question)
+	if m.confirm.detail != "" {
+		q += styleCardMeta.Render("  " + m.confirm.detail)
+	}
+	return q + styleStatus.Render("   [s/y confirma · qualquer outra tecla cancela]")
 }
 
 // viewDetail mostra o card e seus artefatos em abas.
@@ -268,6 +282,7 @@ func (m Model) viewHelp() string {
 		{"", ""},
 		{"s", "subir um agente com o prompt da coluna"},
 		{"f", "pular para o pane do agente"},
+		{"R", "publicar o review no PR (pede confirmação)"},
 		{"", ""},
 		{"p", "editar a coluna (título, config e prompt)"},
 		{"a", "nova coluna"},
