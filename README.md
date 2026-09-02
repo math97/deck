@@ -72,7 +72,7 @@ daquele prompt mora.
 ---
 title: Refine
 order: 20
-agent_kind: claude, codex    # cadeia: se o primeiro recusar, tenta o próximo
+agent_kind: claude, opencode # cadeia: se o primeiro recusar, tenta o próximo
 skill: refinar-tarefa        # opcional: usa uma skill em vez de prompt do zero
 wip_limit: 3
 ---
@@ -137,14 +137,26 @@ tiver texto próprio, ele entra depois da skill, como complemento.
 `agent_kind` aceita uma cadeia:
 
 ```yaml
-agent_kind: claude, codex, gemini
+agent_kind: claude, codex, opencode
 ```
 
 Se o primeiro recusar — cota esgotada, binário ausente, sessão expirada — o deck
 tenta o seguinte e avisa qual subiu. O provedor usado fica registrado no `## Log`
 do card, porque dias depois é a única forma de saber com quem o trabalho foi feito.
 
-Os tipos aceitos são os que o herdr reconhece (`herdr agent` lista).
+Os tipos aceitos são os que o herdr reconhece; o deck lê a lista do próprio
+`herdr agent` e avisa ao abrir o board se algum nome não existir, em vez de
+falhar só na hora de disparar.
+
+### OpenRouter, OmniRouter e afins
+
+Use `opencode` na cadeia e configure o roteador **dentro dele**. O deck não fala
+com API de modelo nenhuma e não guarda chave — quem gerencia credencial e modelo
+é o agente, que é o lugar certo para isso.
+
+```yaml
+agent_kind: claude, opencode    # claude local; se a cota acabar, cai no roteador
+```
 
 ## A esteira
 
