@@ -1,11 +1,11 @@
 # AGENTS.md
 
-Instruções para agentes de código trabalhando neste repositório.
+Instruções para agentes de código que trabalham **neste repositório** — ou seja,
+para quem está construindo o `deck`, não para quem foi disparado por ele.
 
-O `deck` é um board kanban de terminal em Go, cujas colunas e cards são arquivos
-markdown. Ele existe para orquestrar agentes — o que significa que **você
-provavelmente foi disparado por ele**, com o prompt de uma coluna e o caminho de
-um card.
+O `deck` é um board kanban de terminal em Go: colunas e cards são arquivos
+markdown, o TUI é uma view descartável sobre eles, e o board dispara e acompanha
+agentes via [herdr](https://herdr.dev).
 
 ## Leia primeiro
 
@@ -15,8 +15,8 @@ um card.
 | [`docs/go-patterns.md`](docs/go-patterns.md) | padrões de Go com exemplos daqui |
 | [`README.md`](README.md) | o que o app faz, do ponto de vista de quem usa |
 
-Não repita aqui o que está lá. Se você for adicionar uma regra permanente,
-coloque no arquivo certo e referencie.
+Não duplique conteúdo entre eles. Regra permanente vai no arquivo certo e é
+referenciada dos outros.
 
 ## Antes de entregar
 
@@ -24,58 +24,76 @@ coloque no arquivo certo e referencie.
 go build ./... && go vet ./... && gofmt -l . && go test ./...
 ```
 
-`gofmt -l .` tem que sair vazio. Os quatro têm que passar. Não entregue com teste
-quebrado dizendo que "não tem a ver com a mudança" — se quebrou, ou você quebrou,
-ou o teste estava errado; nos dois casos é preciso resolver.
+`gofmt -l .` tem que sair vazio; os quatro têm que passar. Não entregue com teste
+quebrado alegando que "não tem a ver com a mudança" — ou você quebrou, ou o teste
+estava errado, e nos dois casos é preciso resolver.
 
-## Regras de trabalho
+Para mexer em render ou em algo no caminho de cada frame, rode também:
 
-**Todo comportamento novo entra com teste.** Teste o que você teme, não o que é
-fácil de testar. Veja a seção de testes em `docs/go-patterns.md`.
+```sh
+go test ./internal/ui/ -bench . -benchtime=50x -run XXX
+```
 
-**Não invente formato de JSON de outro programa.** `herdr api schema --json` e
-`gh <cmd> --json <campos>` são a autoridade. Testar contra o sistema real já
-revelou um erro que o schema não pegaria.
+## O que este projeto valoriza
 
-**Ação irreversível ou pública pede confirmação.** Publicar num PR, arquivar,
-fechar pane. O padrão da confirmação é **não**.
+**Nada do usuário se perde.** Arquive em vez de apagar; preserve campos de
+frontmatter que você não conhece; escreva de forma atômica. Se sua mudança pode
+destruir trabalho de alguém, ela está errada — reveja antes de continuar.
 
-**Nada do usuário se perde.** Arquive em vez de apagar; preserve campos que você
-não conhece; escreva de forma atômica. Se sua mudança pode destruir trabalho,
-ela está errada.
+**Ação irreversível ou pública pede confirmação**, com o padrão em **não**.
+Publicar num PR, arquivar card ou coluna, fechar pane. Valide as pré-condições
+*antes* de abrir o diálogo: perguntar e depois falhar desperdiça a decisão.
 
-**Comente a decisão, não a mecânica.** O comentário existe para o que não dá
-para deduzir do código: por que assim, e o que dá errado do outro jeito.
+**Nunca descarte um erro em silêncio.** Num TUI, o pior defeito é a tecla que
+parece não fazer nada. Descarte só com comentário dizendo por quê.
 
-**Português** em comentários, mensagens de erro, texto de UI e commits.
-Identificadores em inglês.
+**Integração desligada não pode quebrar nada.** Sem `gh`, sem herdr, sem git: o
+board funciona igual, só sem aquilo.
 
-## Se você foi disparado pelo deck
+**Nada caro na abertura.** Chamada de rede ou subprocesso lento vai para um
+`tea.Cmd` em segundo plano, nunca para `New()`.
 
-O prompt que você recebeu traz, no rodapé:
+**Todo comportamento novo entra com teste** — e teste o que você teme, não o que
+é fácil de testar.
 
-- **onde gravar sua entrega** — um `<coluna>.md` no diretório do card
-- **o que já foi produzido** — os artefatos das colunas anteriores
+**Comente a decisão, não a mecânica.** O código já diz o que faz; o comentário
+diz por que assim e o que dá errado do outro jeito.
 
-Leia os artefatos anteriores antes de começar. É isso que faz a esteira
-funcionar: o refinamento alimenta a implementação, que alimenta o QA. Refazer
-uma decisão já tomada no `refine.md` é retrabalho.
+## Cuidados específicos
 
-**Grave sua entrega no arquivo indicado.** Se você não gravar, o deck salva a
-transcrição do terminal como rede de segurança — que é bem pior de ler do que um
-markdown que você escreveu de propósito.
-
-**Não altere o frontmatter do card nem a seção `## Log`.** Aqueles campos são o
-estado do board; o log é escrito pelo deck. Editá-los quebra a visão do usuário.
-
-Se você está numa worktree (`deck/<card-id>`), ela é sua: commite ali à vontade.
-Não volte para a árvore principal.
+- **Não invente o JSON de outro programa.** `herdr api schema --json` e
+  `gh <cmd> --json <campos>` são a autoridade. Testar contra o sistema real já
+  revelou um erro que o schema não pegaria.
+- **Nunca construa ID do herdr.** Pane fechado não reutiliza ID; pane movido de
+  workspace ganha ID novo. Leia sempre da resposta.
+- **`--force` nunca.** Se o herdr ou o git recusam por causa de trabalho não
+  commitado, recusar é o comportamento certo.
+- **Asserção sobre texto renderizado passa por `plain()`.** O `glamour` intercala
+  ANSI entre as palavras.
+- **Não capture o TUI num PTY.** O Bubble Tea segura o stdin e trava. Monte o
+  `Model`, fixe `width`/`height` e imprima `m.View()`.
 
 ## Escopo
 
 Faça o que foi pedido. Se encontrar outro problema pelo caminho, **relate em vez
-de consertar por conta própria** — uma mudança que o usuário não pediu, num card
-sobre outra coisa, é ruído no diff e no review.
+de consertar por conta própria** — mudança não pedida é ruído no diff e no review.
 
 Se o pedido estiver ambíguo de um jeito que mude o resultado, pergunte. Se der
-para decidir com bom senso, decida e diga qual suposição você usou.
+para decidir com bom senso, decida e diga qual suposição usou.
+
+## Idioma
+
+Comentários, mensagens de erro, texto de UI, documentação e commits em
+**português**. Identificadores em inglês.
+
+Mensagem de commit explica **por quê**, não o quê — o diff já mostra o quê.
+Registre a alternativa que você descartou e o motivo.
+
+## Contribuindo
+
+Este projeto vai para open source. Ao propor mudança:
+
+- um commit por ideia, com corpo explicando a decisão
+- sem dependência nova sem justificativa no corpo do commit
+- README, `CLAUDE.md` e `docs/go-patterns.md` atualizados junto com o código que
+  os contradiz

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -242,5 +243,109 @@ func TestSlugify(t *testing.T) {
 		if got := Slugify(in); got != want {
 			t.Errorf("Slugify(%q) = %q, esperava %q", in, got, want)
 		}
+	}
+}
+
+func TestColumnAgentKindChain(t *testing.T) {
+	b := setup(t)
+	path := filepath.Join(b.Root, "columns", "refine.md")
+	os.WriteFile(path, []byte("---\ntitle: Refine\norder: 20\nagent_kind: claude, codex , gemini\n---\n\nprompt\n"), 0o644)
+
+	b2, _ := Load(b.Root)
+	col := b2.Column("refine")
+	want := []string{"claude", "codex", "gemini"}
+	if len(col.AgentKinds) != 3 {
+		t.Fatalf("esperava 3 provedores, veio %v", col.AgentKinds)
+	}
+	for i, k := range want {
+		if col.AgentKinds[i] != k {
+			t.Errorf("provedor %d: esperava %q, veio %q", i, k, col.AgentKinds[i])
+		}
+	}
+	if col.AgentKind() != "claude" {
+		t.Errorf("o primeiro da cadeia deveria ser o padrão: %q", col.AgentKind())
+	}
+
+	// A cadeia sobrevive a um round-trip pelo disco.
+	col.Save()
+	b3, _ := Load(b.Root)
+	if len(b3.Column("refine").AgentKinds) != 3 {
+		t.Error("a cadeia não persistiu ao salvar")
+	}
+}
+
+func TestColumnWithoutAgentKindDefaultsToClaude(t *testing.T) {
+	b := setup(t)
+	if got := b.Column("todo").AgentKind(); got != "claude" {
+		t.Errorf("padrão deveria ser claude, veio %q", got)
+	}
+}
+
+func TestSkillColumnHasPromptWithoutBody(t *testing.T) {
+	b := setup(t)
+	path := filepath.Join(b.Root, "columns", "refine.md")
+	os.WriteFile(path, []byte("---\ntitle: Refine\norder: 20\nskill: minha-skill\n---\n"), 0o644)
+
+	b2, _ := Load(b.Root)
+	col := b2.Column("refine")
+	if col.Skill != "minha-skill" {
+		t.Errorf("skill não lida: %q", col.Skill)
+	}
+	// Sem corpo, mas com skill: a coluna dispara agente.
+	if !col.HasPrompt() {
+		t.Error("coluna com skill deveria contar como tendo prompt")
+	}
+}
+
+func TestRenderPromptUsesSkill(t *testing.T) {
+	b := setup(t)
+	path := filepath.Join(b.Root, "columns", "refine.md")
+	os.WriteFile(path, []byte("---\ntitle: Refine\norder: 20\nskill: fake\n---\n\ninstrução extra do board\n"), 0o644)
+
+	// Injeta um resolvedor de mentira: o pacote board não conhece o disco.
+	old := Skills
+	Skills = func(dir, name string) (string, error) {
+		if name != "fake" {
+			return "", fmt.Errorf("skill %q não encontrada", name)
+		}
+		return "CORPO DA SKILL", nil
+	}
+	defer func() { Skills = old }()
+
+	b2, _ := Load(b.Root)
+	card, _ := b2.NewCard("x", "refine")
+
+	out, err := b2.RenderPrompt(card, b2.Column("refine"), "/tmp")
+	if err != nil {
+		t.Fatalf("RenderPrompt: %v", err)
+	}
+	if !strings.Contains(out, "CORPO DA SKILL") {
+		t.Errorf("a skill deveria virar o prompt:\n%s", out)
+	}
+	// O texto da coluna entra depois, como complemento.
+	if !strings.Contains(out, "instrução extra do board") {
+		t.Errorf("o texto da coluna deveria ser preservado:\n%s", out)
+	}
+	if strings.Index(out, "CORPO DA SKILL") > strings.Index(out, "instrução extra") {
+		t.Error("a skill deveria vir antes do complemento da coluna")
+	}
+}
+
+func TestRenderPromptReportsMissingSkill(t *testing.T) {
+	b := setup(t)
+	path := filepath.Join(b.Root, "columns", "refine.md")
+	os.WriteFile(path, []byte("---\ntitle: Refine\norder: 20\nskill: fantasma\n---\n"), 0o644)
+
+	old := Skills
+	Skills = func(dir, name string) (string, error) {
+		return "", fmt.Errorf("skill %q não encontrada", name)
+	}
+	defer func() { Skills = old }()
+
+	b2, _ := Load(b.Root)
+	card, _ := b2.NewCard("x", "refine")
+
+	if _, err := b2.RenderPrompt(card, b2.Column("refine"), "/tmp"); err == nil {
+		t.Error("skill inexistente deveria falhar claramente")
 	}
 }

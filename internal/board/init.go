@@ -11,7 +11,7 @@ type defaultColumn struct {
 	key        string
 	title      string
 	order      int
-	agentKind  string
+	agentKinds []string
 	prompt     string
 	postReview bool
 }
@@ -23,7 +23,7 @@ var defaultColumns = []defaultColumn{
 		key: "todo", title: "To Do", order: 10,
 	},
 	{
-		key: "refine", title: "Refine", order: 20, agentKind: "claude",
+		key: "refine", title: "Refine", order: 20, agentKinds: []string{"claude"},
 		prompt: `Você vai refinar esta tarefa comigo antes de qualquer código ser escrito.
 
 Leia o card em {{card_path}}.
@@ -38,7 +38,7 @@ Quando tiver o suficiente, reescreva o corpo do card no lugar, mantendo o
 frontmatter intacto e preservando a seção ## Log.`,
 	},
 	{
-		key: "in-progress", title: "In Progress", order: 30, agentKind: "claude",
+		key: "in-progress", title: "In Progress", order: 30, agentKinds: []string{"claude"},
 		prompt: `Implemente a tarefa descrita em {{card_path}}.
 
 Antes de escrever código, leia o refinamento que já foi feito neste card —
@@ -50,7 +50,7 @@ Grave um plano curto antes de executar: o que vai mudar, em quais arquivos, e
 o que fica de fora. Ao terminar, registre o que de fato mudou.`,
 	},
 	{
-		key: "code-review", title: "Code Review", order: 35, agentKind: "claude",
+		key: "code-review", title: "Code Review", order: 35, agentKinds: []string{"claude"},
 		postReview: true,
 		prompt: `Revise o código desta tarefa. O card está em {{card_path}}.
 
@@ -68,7 +68,7 @@ Se não houver nada a apontar, diga isso em uma linha. Review longo por
 educação desperdiça o tempo de quem lê.`,
 	},
 	{
-		key: "qa", title: "QA", order: 40, agentKind: "claude",
+		key: "qa", title: "QA", order: 40, agentKinds: []string{"claude"},
 		prompt: `Monte e execute o plano de testes da tarefa em {{card_path}}.
 
 Leia o refinamento e o registro da implementação — estão listados no rodapé
@@ -121,7 +121,7 @@ func Init(dir string) (string, []string, error) {
 			Path:       path,
 			Title:      dc.title,
 			Order:      dc.order,
-			AgentKind:  dc.agentKind,
+			AgentKinds: dc.agentKinds,
 			Prompt:     dc.prompt,
 			PostReview: dc.postReview,
 			doc:        &Doc{},
@@ -147,6 +147,11 @@ e faz o board funcionar sem configuração nenhuma.
   Precisa de ` + "`gh auth login`" + `.
 - **herdr** — disparar e acompanhar agentes. Só funciona com o deck aberto
   dentro de um pane do herdr.
+- **agent_kind** (na coluna) — aceita uma cadeia: ` + "`agent_kind: claude, codex`" + `.
+  Se o primeiro provedor falhar — cota esgotada, por exemplo — o deck tenta o
+  seguinte e registra no card qual foi usado.
+- **skill** (na coluna) — usa uma skill do Claude Code como prompt em vez de
+  escrever um do zero. Veja ` + "`deck skills`" + `.
 - **worktree** — cada agente trabalha num checkout e branch próprios
   (` + "`deck/<card-id>`" + `), sem disputar a árvore com você. Em ` + "`auto`" + `, usa worktree
   quando o diretório é um repositório git e cai no modo simples quando não é.

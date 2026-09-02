@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,6 +37,8 @@ type agentReleasedMsg struct {
 type agentStartedMsg struct {
 	cardPath  string
 	agent     *herdr.Agent
+	kind      string // provedor que de fato subiu
+	fallback  bool   // houve provedor recusado antes deste
 	workspace string // preenchido quando o agente ganhou worktree própria
 	worktree  string
 	err       error
@@ -128,21 +131,39 @@ func startAgent(b *board.Board, card *board.Card, col *board.Column, taken map[s
 			return fail(err)
 		}
 
-		kind := col.AgentKind
-		if kind == "" {
-			kind = "claude"
-		}
 		name := herdr.AgentName(card.ID, taken)
 
-		agent, err := herdr.AgentStart(ctx, name, kind, paneID)
-		if err != nil {
+		// Cadeia de provedores: se o primeiro recusar — cota esgotada, binário
+		// ausente, sessão expirada — tenta o próximo em vez de desistir. É o
+		// que permite continuar trabalhando quando os tokens de um acabam.
+		kinds := col.AgentKinds
+		if len(kinds) == 0 {
+			kinds = []string{"claude"}
+		}
+
+		var (
+			agent    *herdr.Agent
+			used     string
+			attempts []string
+			err2     error
+		)
+		for _, kind := range kinds {
+			agent, err2 = herdr.AgentStart(ctx, name, kind, paneID)
+			if err2 == nil {
+				used = kind
+				break
+			}
+			attempts = append(attempts, fmt.Sprintf("%s: %v", kind, err2))
+		}
+		if agent == nil {
 			// O que foi criado continua de pé e o nome segue utilizável:
 			// devolvemos o erro para o usuário decidir, sem destruir nada.
-			return fail(err)
+			return fail(fmt.Errorf("nenhum provedor subiu (%s)", strings.Join(attempts, "; ")))
 		}
 
 		msg := agentStartedMsg{
-			cardPath: card.Path, agent: agent,
+			cardPath: card.Path, agent: agent, kind: used,
+			fallback:  len(attempts) > 0,
 			workspace: workspace, worktree: worktree,
 		}
 		if err := herdr.AgentPrompt(ctx, name, prompt); err != nil {

@@ -25,6 +25,7 @@ cmd/deck/       CLI: init, ls, new, prompt, e o TUI
 internal/board/ modelo e persistência — não conhece TUI nem terminal
 internal/ui/    Bubble Tea: model, update, view
 internal/gh/    wrapper sobre o CLI do GitHub
+internal/skill/ localiza skills do Claude Code para usar como prompt
 internal/herdr/ wrapper sobre o CLI do herdr
 ```
 
@@ -98,9 +99,26 @@ Todo comportamento novo entra com teste. Os de UI dirigem o `Model` por
 ANSI entre as palavras, inclusive nos espaços; `strings.Contains` na saída crua
 falha mesmo com o texto na tela.
 
+Benchmarks em `internal/ui/bench_test.go` cobrem o custo de um frame. Rode-os ao
+mexer em render: `go test ./internal/ui/ -bench . -benchtime=50x -run XXX`.
+
 Para inspecionar visualmente, escreva um teste temporário que monte o `Model`,
 fixe `width`/`height` e imprima `m.View()`. Não tente capturar o TUI num PTY —
 o Bubble Tea segura o stdin e trava.
+
+## Skills e provedores
+
+Uma coluna pode apontar para uma skill (`skill: <nome>`) em vez de ter prompt
+próprio. O corpo da skill é **inlinado** no prompt, não invocado como
+`/nome`: assim funciona com qualquer agent kind, não só Claude Code.
+
+`agent_kind` é uma cadeia (`claude, codex`): o `startAgent` tenta em ordem e
+segue no primeiro que subir. É o que permite continuar quando a cota de um
+provedor acaba. O provedor usado vai para o `## Log` do card.
+
+`board` não conhece o disco de skills: `board.Skills` é uma função injetada
+pelo `cmd`, o que mantém o núcleo puro e deixa o teste usar uma skill de
+mentira.
 
 ## Worktree
 

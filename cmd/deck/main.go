@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/matheusalbuquerque/deck/internal/skill"
 	"github.com/matheusalbuquerque/deck/internal/ui"
 )
 
@@ -20,6 +21,7 @@ uso:
   deck ls         lista os cards por coluna, sem abrir o TUI
   deck new "<título>" [--column <key>]
                   cria um card (padrão: a primeira coluna do board)
+  deck skills     lista as skills disponíveis para usar numa coluna
   deck prompt <card>
                   imprime o prompt da coluna atual do card, já renderizado
                   (útil para mandar a um agente: deck prompt x | claude -p)
@@ -31,6 +33,16 @@ o board vive em .deck/
 `
 
 func main() {
+	// Liga o resolvedor de skills: o pacote board não conhece o sistema de
+	// arquivos de skills, só sabe pedir um corpo por nome.
+	board.Skills = func(projectDir, name string) (string, error) {
+		sk, err := skill.Find(projectDir, name)
+		if err != nil {
+			return "", err
+		}
+		return sk.Body, nil
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "deck:", err)
@@ -59,6 +71,8 @@ func run(args []string, cwd string, out io.Writer) error {
 		return runList(cwd, out)
 	case "new":
 		return runNew(args[1:], cwd, out)
+	case "skills":
+		return runSkills(cwd, out)
 	case "prompt":
 		return runPrompt(args[1:], cwd, out)
 	case "help", "-h", "--help":
@@ -218,4 +232,33 @@ func runNew(args []string, cwd string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "%s\n", card.ID)
 	return nil
+}
+
+// runSkills lista as skills que uma coluna pode referenciar.
+func runSkills(cwd string, out io.Writer) error {
+	list := skill.List(cwd)
+	if len(list) == 0 {
+		fmt.Fprintln(out, "nenhuma skill encontrada em:")
+		for _, r := range skill.Roots(cwd) {
+			fmt.Fprintf(out, "  %s (%s)\n", r.Path, r.Source)
+		}
+		return nil
+	}
+	for _, s := range list {
+		fmt.Fprintf(out, "%-34s %s\n", s.Name, s.Source)
+		if s.Description != "" {
+			fmt.Fprintf(out, "%-34s %s\n", "", truncate(s.Description, 100))
+		}
+	}
+	fmt.Fprintf(out, "\nuse numa coluna com `skill: <nome>` no frontmatter\n")
+	return nil
+}
+
+// truncate encurta para caber numa linha de terminal.
+func truncate(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max-1]) + "…"
 }

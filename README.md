@@ -19,6 +19,7 @@ deck init            # cria .deck/ com as cinco colunas padrão
 deck                 # abre o board
 deck ls              # lista os cards em texto puro, sem TUI
 deck new "<título>"  # cria um card (--column <key> escolhe a coluna)
+deck skills          # lista as skills que uma coluna pode usar
 deck prompt <card>   # imprime o prompt da coluna atual, já renderizado
 ```
 
@@ -71,7 +72,8 @@ daquele prompt mora.
 ---
 title: Refine
 order: 20
-agent_kind: claude
+agent_kind: claude, codex    # cadeia: se o primeiro recusar, tenta o próximo
+skill: refinar-tarefa        # opcional: usa uma skill em vez de prompt do zero
 wip_limit: 3
 ---
 
@@ -112,6 +114,37 @@ número: `1`-`9` marcam e desmarcam direto no TUI, gravando no markdown.
 
 A seção `## Log` é escrita automaticamente a cada transição. É o que faz um card
 parado há duas semanas voltar a fazer sentido quando você o reabre.
+
+## Skills como prompt
+
+Se você já tem uma skill do Claude Code que faz o trabalho, não reescreva o
+prompt: aponte a coluna para ela.
+
+```yaml
+skill: test-driven-development
+```
+
+`deck skills` lista o que está disponível — do projeto (`.claude/skills/`), do
+seu home (`~/.claude/skills/`) e dos plugins instalados, nessa ordem de
+precedência.
+
+O deck **inlina o corpo da skill** no prompt em vez de mandar `/nome`. Assim a
+coluna funciona com qualquer agente, não só com o Claude Code. Se a coluna também
+tiver texto próprio, ele entra depois da skill, como complemento.
+
+## Trocar de provedor sem parar
+
+`agent_kind` aceita uma cadeia:
+
+```yaml
+agent_kind: claude, codex, gemini
+```
+
+Se o primeiro recusar — cota esgotada, binário ausente, sessão expirada — o deck
+tenta o seguinte e avisa qual subiu. O provedor usado fica registrado no `## Log`
+do card, porque dias depois é a única forma de saber com quem o trabalho foi feito.
+
+Os tipos aceitos são os que o herdr reconhece (`herdr agent` lista).
 
 ## A esteira
 

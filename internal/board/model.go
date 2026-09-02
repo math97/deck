@@ -12,13 +12,21 @@ import (
 // Column é uma coluna do board. O corpo do arquivo é o prompt enviado ao agente
 // quando um card entra nesta coluna; uma coluna sem corpo não dispara nada.
 type Column struct {
-	Key       string // stem do arquivo: .deck/columns/<key>.md
-	Path      string
-	Title     string
-	Order     int
-	AgentKind string
-	WIPLimit  int
-	Prompt    string
+	Key      string // stem do arquivo: .deck/columns/<key>.md
+	Path     string
+	Title    string
+	Order    int
+	WIPLimit int
+	Prompt   string
+
+	// AgentKinds é a cadeia de provedores a tentar, em ordem. Vem de
+	// `agent_kind: claude, codex` — o segundo entra se o primeiro falhar,
+	// que é o caso de cota esgotada.
+	AgentKinds []string
+
+	// Skill reaproveita uma skill do Claude Code como prompt, para não
+	// reescrever do zero o que já está escrito.
+	Skill string
 
 	// PostReview marca a coluna cujo artefato é um review destinado ao PR.
 	PostReview bool
@@ -27,7 +35,29 @@ type Column struct {
 }
 
 // HasPrompt informa se mover um card para cá deve oferecer disparo de agente.
-func (c *Column) HasPrompt() bool { return strings.TrimSpace(c.Prompt) != "" }
+// Uma coluna com skill dispara mesmo sem corpo próprio.
+func (c *Column) HasPrompt() bool {
+	return strings.TrimSpace(c.Prompt) != "" || strings.TrimSpace(c.Skill) != ""
+}
+
+// AgentKind devolve o primeiro provedor da cadeia, ou "claude".
+func (c *Column) AgentKind() string {
+	if len(c.AgentKinds) > 0 {
+		return c.AgentKinds[0]
+	}
+	return "claude"
+}
+
+// splitList quebra "a, b , c" em ["a","b","c"], descartando vazios.
+func splitList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // AgentRef liga um card ao agente que o herdr está hospedando.
 type AgentRef struct {

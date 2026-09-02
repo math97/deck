@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -13,6 +14,11 @@ import (
 var (
 	renderMu    sync.Mutex
 	renderCache = map[int]*glamour.TermRenderer{}
+
+	// Cache do último markdown renderizado. Rolar o detalhe segurando j
+	// redesenha o mesmo corpo dezenas de vezes por segundo; uma entrada basta,
+	// porque só há um card aberto por vez.
+	lastKey, lastOut string
 )
 
 // renderMarkdown formata markdown para o terminal, respeitando o tema claro ou
@@ -48,6 +54,15 @@ func renderMarkdown(md string, width int) string {
 	}
 	renderMu.Unlock()
 
+	key := fmt.Sprintf("%d\x00%s", width, md)
+	renderMu.Lock()
+	if key == lastKey {
+		cached := lastOut
+		renderMu.Unlock()
+		return cached
+	}
+	renderMu.Unlock()
+
 	out, err := r.Render(md)
 	if err != nil {
 		return md
@@ -55,5 +70,11 @@ func renderMarkdown(md string, width int) string {
 
 	// O glamour emolduora com linhas em branco; num overlay apertado elas são
 	// espaço desperdiçado.
-	return strings.Trim(out, "\n")
+	out = strings.Trim(out, "\n")
+
+	renderMu.Lock()
+	lastKey, lastOut = key, out
+	renderMu.Unlock()
+
+	return out
 }
