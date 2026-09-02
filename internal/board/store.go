@@ -89,7 +89,8 @@ func loadColumns(b *Board) error {
 			Path:       path,
 			Title:      title,
 			Order:      atoiOr(doc.GetString("order"), 999),
-			AgentKind:  doc.GetString("agent_kind"),
+			AgentKinds: splitList(doc.GetString("agent_kind")),
+			Skill:      strings.TrimSpace(doc.GetString("skill")),
 			WIPLimit:   atoiOr(doc.GetString("wip_limit"), 0),
 			Prompt:     strings.TrimSpace(doc.Body),
 			PostReview: parseBool(doc.GetString("post_review")),
@@ -297,9 +298,10 @@ func (c *Column) Save() error {
 	}
 	c.doc.SetString("title", c.Title)
 	c.doc.SetInt("order", c.Order)
-	if c.AgentKind != "" {
-		c.doc.SetString("agent_kind", c.AgentKind)
+	if len(c.AgentKinds) > 0 {
+		c.doc.SetString("agent_kind", strings.Join(c.AgentKinds, ", "))
 	}
+	setOrDelete(c.doc, "skill", c.Skill)
 	if c.WIPLimit > 0 {
 		c.doc.SetInt("wip_limit", c.WIPLimit)
 	} else {

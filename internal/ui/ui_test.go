@@ -531,7 +531,7 @@ func TestLinkAgentPersistsToCard(t *testing.T) {
 	m = press(t, m, "enter")
 
 	card := m.currentCard()
-	m.linkAgent(card, &herdr.Agent{Name: "card-tarefa", PaneID: "w1:p7", Kind: "claude"}, "", "")
+	m.linkAgent(card, &herdr.Agent{Name: "card-tarefa", PaneID: "w1:p7", Kind: "claude"}, "claude", "", "")
 
 	b2, err := board.Load(m.root)
 	if err != nil {
@@ -1318,7 +1318,7 @@ func TestLinkAgentRecordsWorktree(t *testing.T) {
 	card := m.currentCard()
 	m.linkAgent(card,
 		&herdr.Agent{Name: "card-wt", PaneID: "w2:p1", Kind: "claude"},
-		"w2", "/tmp/repo-deck-card-wt")
+		"claude", "w2", "/tmp/repo-deck-card-wt")
 
 	b2, _ := board.Load(m.root)
 	got := b2.CardsIn("todo")[0]

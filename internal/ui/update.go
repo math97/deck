@@ -532,7 +532,7 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(false, "%v", msg.err)
 		// Mesmo com erro no prompt, o agente pode ter subido: registra o que há.
 		if card != nil && msg.agent != nil {
-			m.linkAgent(card, msg.agent, msg.workspace, msg.worktree)
+			m.linkAgent(card, msg.agent, msg.kind, msg.workspace, msg.worktree)
 		}
 		return m, clearStatusCmd()
 	}
@@ -540,31 +540,41 @@ func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
 		return m, clearStatusCmd()
 	}
 
-	m.linkAgent(card, msg.agent, msg.workspace, msg.worktree)
+	m.linkAgent(card, msg.agent, msg.kind, msg.workspace, msg.worktree)
 	if m.pendingBaseline.path == "" {
 		m.pendingBaseline = snapshotArtifact(card, card.Column)
 	}
 	m.baselines[msg.agent.Name] = m.pendingBaseline
 	m.pendingBaseline = baseline{}
 
-	m.setStatus(true, "agente %s rodando em %s", msg.agent.Name, msg.agent.PaneID)
+	if msg.fallback {
+		m.setStatus(true, "agente %s rodando com %s (o primeiro provedor recusou)",
+			msg.agent.Name, msg.kind)
+	} else {
+		m.setStatus(true, "agente %s rodando em %s", msg.agent.Name, msg.agent.PaneID)
+	}
 	return m, tea.Batch(pollAgents(), clearStatusCmd())
 }
 
 // linkAgent grava a ligação card ↔ agente no frontmatter e no log.
-func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent, workspace, worktree string) {
+func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent, kind, workspace, worktree string) {
+	if kind == "" {
+		kind = agent.Kind
+	}
 	card.Agent = &board.AgentRef{
 		Name:      agent.Name,
 		Pane:      agent.PaneID,
-		Kind:      agent.Kind,
+		Kind:      kind,
 		Workspace: workspace,
 		Worktree:  worktree,
 	}
+	// O provedor entra no log: dias depois é a única forma de saber com quem o
+	// trabalho foi feito, sobretudo quando houve troca por cota.
 	if worktree != "" {
-		card.AppendLog("agente `%s` iniciado em %s, worktree %s",
-			agent.Name, agent.PaneID, worktree)
+		card.AppendLog("agente `%s` (%s) iniciado em %s, worktree %s",
+			agent.Name, kind, agent.PaneID, worktree)
 	} else {
-		card.AppendLog("agente `%s` iniciado em %s", agent.Name, agent.PaneID)
+		card.AppendLog("agente `%s` (%s) iniciado em %s", agent.Name, kind, agent.PaneID)
 	}
 	if err := card.Save(); err != nil {
 		m.setStatus(false, "salvando card: %v", err)

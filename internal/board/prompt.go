@@ -19,6 +19,21 @@ func (b *Board) RenderPrompt(card *Card, col *Column, cwd string) (string, error
 		return "", fmt.Errorf("a coluna %s não tem prompt", col.Title)
 	}
 
+	// Uma skill entra como o corpo do prompt. Se a coluna também tiver texto
+	// próprio, ele vem depois: a skill diz como trabalhar, e a coluna
+	// acrescenta o que é específico deste board.
+	base := col.Prompt
+	if col.Skill != "" {
+		sk, err := b.resolveSkill(col.Skill, cwd)
+		if err != nil {
+			return "", err
+		}
+		base = sk
+		if strings.TrimSpace(col.Prompt) != "" {
+			base += "\n\n---\n\n" + col.Prompt
+		}
+	}
+
 	outPath, err := card.ArtifactPath(col.Key)
 	if err != nil {
 		return "", err
@@ -37,7 +52,7 @@ func (b *Board) RenderPrompt(card *Card, col *Column, cwd string) (string, error
 		"github_pr":   card.GitHubPR,
 	}
 
-	out := col.Prompt
+	out := base
 	for k, v := range vars {
 		out = strings.ReplaceAll(out, "{{"+k+"}}", v)
 	}
@@ -97,4 +112,24 @@ func (b *Board) RelPath(path string) string {
 		return rel
 	}
 	return path
+}
+
+// SkillResolver traz o corpo de uma skill pelo nome. É uma função em vez de uma
+// dependência direta para manter o pacote board sem conhecer o sistema de
+// arquivos de skills — e para o teste poder injetar uma skill de mentira.
+type SkillResolver func(projectDir, name string) (string, error)
+
+// Skills é o resolvedor usado ao renderizar prompts. O cmd o preenche na
+// inicialização; nulo significa "skills indisponíveis".
+var Skills SkillResolver
+
+func (b *Board) resolveSkill(name, cwd string) (string, error) {
+	if Skills == nil {
+		return "", fmt.Errorf("skill %q pedida, mas o resolvedor de skills não está ligado", name)
+	}
+	body, err := Skills(cwd, name)
+	if err != nil {
+		return "", err
+	}
+	return body, nil
 }
