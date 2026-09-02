@@ -266,23 +266,21 @@ func AgentFocus(ctx context.Context, target string) error {
 
 // AgentRead devolve a saída recente do agente. recent-unwrapped junta as
 // quebras suaves, que é o que serve para transcrição.
+//
+// Diferente do resto do CLI, `agent read` imprime o conteúdo do pane direto,
+// sem envelope JSON — verificado contra um herdr vivo. Tentar decodificar aqui
+// fazia toda captura falhar com "resposta ilegível" antes mesmo de chegar ao
+// fallback de transcrição.
 func AgentRead(ctx context.Context, target string, lines int) (string, error) {
 	if lines <= 0 {
 		lines = 200
 	}
-	var res struct {
-		Content string `json:"content"`
-		Text    string `json:"text"`
-	}
-	err := run(ctx, &res, "agent", "read", target,
+	out, err := output(ctx, "agent", "read", target,
 		"--source", "recent-unwrapped", "--lines", fmt.Sprint(lines))
 	if err != nil {
 		return "", err
 	}
-	if res.Content != "" {
-		return res.Content, nil
-	}
-	return res.Text, nil
+	return string(out), nil
 }
 
 var nameUnsafe = regexp.MustCompile(`[^a-z0-9_-]+`)
