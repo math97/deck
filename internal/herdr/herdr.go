@@ -302,3 +302,78 @@ func PaneClose(ctx context.Context, paneID string) error {
 	}
 	return run(ctx, nil, "pane", "close", paneID)
 }
+
+// Worktree é um checkout isolado criado pelo herdr.
+type Worktree struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Label  string `json:"label"`
+}
+
+// WorktreeCreated é o resultado de criar uma worktree: além do checkout, o
+// herdr abre um workspace e uma aba com um pane pronto.
+type WorktreeCreated struct {
+	Worktree    Worktree `json:"worktree"`
+	RootPane    Pane     `json:"root_pane"`
+	WorkspaceID string
+}
+
+// WorktreeCreate cria um checkout isolado e o workspace que o hospeda.
+//
+// Diferente de PaneSplit, aqui não é preciso dividir nada: o herdr já entrega
+// um pane pronto no workspace novo. O agente trabalha num branch próprio, sem
+// disputar a árvore com você nem com os outros cards.
+func WorktreeCreate(ctx context.Context, cwd, branch, label string) (*WorktreeCreated, error) {
+	args := []string{"worktree", "create", "--cwd", cwd, "--no-focus"}
+	if branch != "" {
+		args = append(args, "--branch", branch)
+	}
+	if label != "" {
+		args = append(args, "--label", label)
+	}
+
+	var res struct {
+		Worktree  Worktree `json:"worktree"`
+		RootPane  Pane     `json:"root_pane"`
+		Workspace struct {
+			WorkspaceID string `json:"workspace_id"`
+		} `json:"workspace"`
+	}
+	if err := run(ctx, &res, args...); err != nil {
+		return nil, err
+	}
+	if res.RootPane.PaneID == "" {
+		return nil, fmt.Errorf("herdr não devolveu o pane da worktree")
+	}
+	return &WorktreeCreated{
+		Worktree:    res.Worktree,
+		RootPane:    res.RootPane,
+		WorkspaceID: res.Workspace.WorkspaceID,
+	}, nil
+}
+
+// WorktreeRemove remove a worktree de um workspace.
+//
+// Nunca passa --force: se houver trabalho não commitado, o herdr recusa, e
+// recusar é o comportamento certo. Descartar um checkout sujo tem que ser uma
+// decisão explícita do usuário, tomada fora do deck.
+func WorktreeRemove(ctx context.Context, workspaceID string) error {
+	if workspaceID == "" {
+		return fmt.Errorf("workspace vazio")
+	}
+	return run(ctx, nil, "worktree", "remove", "--workspace", workspaceID)
+}
+
+// BranchName monta o nome do branch de um card. O prefixo agrupa tudo que o
+// deck criou, para ficar fácil de listar e limpar depois.
+func BranchName(cardID string) string {
+	slug := nameUnsafe.ReplaceAllString(strings.ToLower(cardID), "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		slug = "card"
+	}
+	if len(slug) > 40 {
+		slug = strings.TrimRight(slug[:40], "-")
+	}
+	return "deck/" + slug
+}

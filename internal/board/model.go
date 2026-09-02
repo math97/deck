@@ -34,6 +34,10 @@ type AgentRef struct {
 	Name string
 	Pane string
 	Kind string
+
+	// Preenchidos quando o agente roda numa worktree própria.
+	Workspace string
+	Worktree  string
 }
 
 // Artifact é a saída que um agente produziu numa coluna: o refinamento, o

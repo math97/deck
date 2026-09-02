@@ -531,7 +531,7 @@ func TestLinkAgentPersistsToCard(t *testing.T) {
 	m = press(t, m, "enter")
 
 	card := m.currentCard()
-	m.linkAgent(card, &herdr.Agent{Name: "card-tarefa", PaneID: "w1:p7", Kind: "claude"})
+	m.linkAgent(card, &herdr.Agent{Name: "card-tarefa", PaneID: "w1:p7", Kind: "claude"}, "", "")
 
 	b2, err := board.Load(m.root)
 	if err != nil {
@@ -1306,5 +1306,162 @@ func TestBoardErrorsDoNotEatTheHints(t *testing.T) {
 	}
 	if !strings.Contains(det, "coluna ?") {
 		t.Errorf("deveria dizer onde os cards foram parar:\n%s", det)
+	}
+}
+
+func TestLinkAgentRecordsWorktree(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com worktree")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	m.linkAgent(card,
+		&herdr.Agent{Name: "card-wt", PaneID: "w2:p1", Kind: "claude"},
+		"w2", "/tmp/repo-deck-card-wt")
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("todo")[0]
+	if got.Agent == nil || got.Agent.Workspace != "w2" {
+		t.Errorf("workspace não persistiu: %+v", got.Agent)
+	}
+	if got.Agent.Worktree != "/tmp/repo-deck-card-wt" {
+		t.Errorf("worktree não persistiu: %+v", got.Agent)
+	}
+	if !strings.Contains(got.Body, "worktree /tmp/repo-deck-card-wt") {
+		t.Errorf("o log deveria citar a worktree:\n%s", got.Body)
+	}
+}
+
+func TestReleaseMentionsWorktreeInConfirmation(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com wt")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Agent = &board.AgentRef{
+		Name: "card-wt", Pane: "w2:p1", Workspace: "w2", Worktree: "/tmp/wt",
+	}
+	card.Save()
+	m.reload()
+	m.herdrInside = true
+
+	m = press(t, m, "c")
+	out := plain(m.View())
+	if !strings.Contains(out, "remover a worktree") {
+		t.Errorf("a confirmação deveria avisar sobre a worktree:\n%s", out)
+	}
+	if !strings.Contains(out, "não commitado") {
+		t.Errorf("deveria avisar que recusa com trabalho pendente:\n%s", out)
+	}
+}
+
+func TestReleaseReportsWorktreeLeftBehind(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "wt suja", "card-suja")
+
+	next, _ := m.agentReleased(agentReleasedMsg{
+		cardPath:    card.Path,
+		name:        "card-suja",
+		worktreeErr: errWorktreeDirty,
+	})
+	m = next.(Model)
+
+	// O pane fechou; a worktree ficou. O usuário precisa saber disso.
+	if m.statusOK || !strings.Contains(m.status, "worktree ficou") {
+		t.Errorf("deveria avisar que a worktree sobrou, veio %q", m.status)
+	}
+}
+
+func TestWorktreeToggleRespectsConfig(t *testing.T) {
+	m := newTestModel(t)
+	if !m.worktreeEnabled() {
+		t.Error("padrão deveria usar worktree")
+	}
+	m.b.Config.Worktree = board.ToggleOff
+	if m.worktreeEnabled() {
+		t.Error("worktree: off deveria desligar")
+	}
+}
+
+func TestImportRefusedWithGitHubOff(t *testing.T) {
+	m := newTestModel(t)
+	m.ghEnabled = false
+	m = press(t, m, "I")
+	if m.statusOK || !strings.Contains(m.status, "GitHub desligado") {
+		t.Errorf("deveria avisar que o GitHub está desligado, veio %q", m.status)
+	}
+}
+
+func TestImportedCreatesCardFromIssue(t *testing.T) {
+	m := newTestModel(t)
+	m.ghEnabled = true
+
+	next, _ := m.imported(importedMsg{
+		column: "todo",
+		item: &gh.Item{
+			Number: 42,
+			Title:  "Corrigir refresh de token",
+			Body:   "O token expira cedo demais.",
+			URL:    "https://github.com/org/repo/issues/42",
+		},
+	})
+	m = next.(Model)
+
+	cards := m.b.CardsIn("todo")
+	if len(cards) != 1 {
+		t.Fatalf("esperava 1 card, veio %d", len(cards))
+	}
+	got := cards[0]
+	if got.Title != "Corrigir refresh de token" {
+		t.Errorf("título errado: %q", got.Title)
+	}
+	if got.GitHubIssue != "https://github.com/org/repo/issues/42" {
+		t.Errorf("issue não foi ligada: %q", got.GitHubIssue)
+	}
+	if got.GitHubPR != "" {
+		t.Error("issue não deveria virar github_pr")
+	}
+	if !strings.Contains(got.Body, "Descrição original") {
+		t.Errorf("o texto do GitHub deveria entrar em seção própria:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "O token expira cedo demais") {
+		t.Errorf("corpo original perdido:\n%s", got.Body)
+	}
+	if !strings.Contains(got.Body, "Critério de aceite") {
+		t.Error("o card importado deveria ter a seção de critérios")
+	}
+}
+
+func TestImportedPRSetsGitHubPR(t *testing.T) {
+	m := newTestModel(t)
+	next, _ := m.imported(importedMsg{
+		column: "todo",
+		item: &gh.Item{
+			Number: 7, Title: "Um PR", IsPR: true,
+			URL: "https://github.com/org/repo/pull/7",
+		},
+	})
+	m = next.(Model)
+
+	got := m.b.CardsIn("todo")[0]
+	if got.GitHubPR != "https://github.com/org/repo/pull/7" {
+		t.Errorf("PR não foi ligado: %q", got.GitHubPR)
+	}
+	if got.GitHubIssue != "" {
+		t.Error("PR não deveria virar github_issue")
+	}
+}
+
+func TestImportErrorIsReported(t *testing.T) {
+	m := newTestModel(t)
+	next, _ := m.imported(importedMsg{err: errImportFailed})
+	m = next.(Model)
+	if m.statusOK || m.status == "" {
+		t.Error("erro de importação deveria aparecer na barra")
+	}
+	if len(m.b.CardsIn("todo")) != 0 {
+		t.Error("erro não deveria criar card")
 	}
 }

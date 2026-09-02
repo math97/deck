@@ -39,6 +39,10 @@ type Config struct {
 	GitHub Toggle
 	Herdr  Toggle
 
+	// Worktree faz cada agente trabalhar num checkout e branch próprios.
+	// "auto" usa worktree quando o diretório é um repositório git.
+	Worktree Toggle
+
 	// GitHubAutoPost publica o review no PR sem perguntar. Falso por padrão:
 	// comentar num PR é uma ação pública e irreversível, e o usuário deve
 	// decidir cada uma até dizer o contrário.
@@ -51,7 +55,7 @@ type Config struct {
 
 // DefaultConfig é o que vale quando não há config.md.
 func DefaultConfig() *Config {
-	return &Config{GitHub: ToggleAuto, Herdr: ToggleAuto}
+	return &Config{GitHub: ToggleAuto, Herdr: ToggleAuto, Worktree: ToggleAuto}
 }
 
 // loadConfig lê .deck/config.md. Ausência do arquivo não é erro: o board tem
@@ -80,6 +84,9 @@ func loadConfig(root string) (*Config, error) {
 	}
 	if v := parseToggle(doc.GetString("herdr")); v != "" {
 		cfg.Herdr = v
+	}
+	if v := parseToggle(doc.GetString("worktree")); v != "" {
+		cfg.Worktree = v
 	}
 	cfg.GitHubAutoPost = parseBool(doc.GetString("github_auto_post"))
 
@@ -111,6 +118,7 @@ func (c *Config) Save() error {
 	}
 	c.doc.SetString("github", string(c.GitHub))
 	c.doc.SetString("herdr", string(c.Herdr))
+	c.doc.SetString("worktree", string(c.Worktree))
 	if c.GitHubAutoPost {
 		c.doc.SetString("github_auto_post", "on")
 	} else {

@@ -44,6 +44,7 @@ const (
 	inputRenameColumn
 	inputGitHubPR
 	inputFilter
+	inputImport
 )
 
 // Model é o estado da aplicação.
@@ -329,7 +330,16 @@ func startWatcher(root string) chan struct{} {
 		close(out)
 		return out
 	}
-	for _, dir := range []string{root, root + "/columns", root + "/cards"} {
+	// A raiz é obrigatória; os subdiretórios podem não existir ainda num board
+	// recém-criado, e falhar neles não impede o resto de funcionar.
+	if err := w.Add(root); err != nil {
+		w.Close()
+		close(out)
+		return out
+	}
+	for _, dir := range []string{root + "/columns", root + "/cards"} {
+		// Descartado de propósito: num board recém-criado estes podem não
+		// existir ainda, e a raiz já garante que mudanças sejam notadas.
 		_ = w.Add(dir)
 	}
 

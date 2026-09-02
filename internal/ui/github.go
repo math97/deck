@@ -71,6 +71,23 @@ type ghTickMsg struct{}
 // ghAuthMsg traz o resultado da verificação de autenticação.
 type ghAuthMsg struct{ ok bool }
 
+// importedMsg traz a issue ou PR buscado no GitHub.
+type importedMsg struct {
+	item   *gh.Item
+	column string
+	err    error
+}
+
+// importFromGitHub busca a issue ou PR. Fora da goroutine da UI: é rede.
+func importFromGitHub(url, column string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		item, err := gh.Import(ctx, url)
+		return importedMsg{item: item, column: column, err: err}
+	}
+}
+
 // checkGitHubAuth confirma a sessão do gh fora do caminho crítico da abertura.
 func checkGitHubAuth() tea.Cmd {
 	return func() tea.Msg { return ghAuthMsg{ok: gh.Authenticated()} }

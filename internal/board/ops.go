@@ -289,3 +289,33 @@ func (b *Board) ArchiveCard(card *Card) error {
 	}
 	return nil
 }
+
+// NewCardFromSource cria um card a partir de algo trazido de fora — hoje uma
+// issue ou PR do GitHub.
+//
+// O corpo externo entra numa seção própria, separado do seu contexto: assim dá
+// para reler o texto original sem confundi-lo com o que você anotou depois.
+func (b *Board) NewCardFromSource(title, columnKey, sourceURL, sourceBody string, isPR bool) (*Card, error) {
+	card, err := b.NewCard(title, columnKey)
+	if err != nil {
+		return nil, err
+	}
+
+	kind := "issue"
+	if isPR {
+		kind = "pull request"
+		card.GitHubPR = sourceURL
+	} else {
+		card.GitHubIssue = sourceURL
+	}
+
+	body := "## Contexto\n\n" + sourceURL + "\n\n"
+	if strings.TrimSpace(sourceBody) != "" {
+		body += "## Descrição original\n\n" + strings.TrimSpace(sourceBody) + "\n\n"
+	}
+	body += "## Critério de aceite\n\n- [ ] \n"
+	card.Body = body
+
+	card.AppendLog("importado do GitHub (%s)", kind)
+	return card, card.Save()
+}
