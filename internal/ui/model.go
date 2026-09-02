@@ -23,7 +23,15 @@ const (
 	modeInput       // capturando texto (novo card, nova coluna, renomear)
 	modeDetail      // overlay com o corpo do card
 	modeHelp
+	modeConfirm // pergunta sim/não antes de uma ação irreversível
 )
+
+// confirmState é a pergunta pendente e o que fazer quando aceita.
+type confirmState struct {
+	question string
+	detail   string
+	action   func(Model) (tea.Model, tea.Cmd)
+}
 
 // inputKind diz o que fazer com o texto quando o usuário confirma.
 type inputKind int
@@ -70,6 +78,8 @@ type Model struct {
 
 	// Baseline do disparo em voo, até o herdr confirmar o nome do agente.
 	pendingBaseline baseline
+
+	confirm confirmState
 }
 
 // Mensagens internas.
@@ -88,12 +98,17 @@ func New(b *board.Board) Model {
 		root:      b.Root,
 		input:     ti,
 		ghStates:  map[string]gh.State{},
-		ghEnabled: gh.Available(),
-
-		agents:      map[string]herdr.Agent{},
-		herdrInside: herdr.Inside(),
-		baselines:   map[string]baseline{},
+		agents:    map[string]herdr.Agent{},
+		baselines: map[string]baseline{},
 	}
+
+	// A config decide o que está ligado; "auto" cai na disponibilidade real.
+	cfg := b.Config
+	if cfg == nil {
+		cfg = board.DefaultConfig()
+	}
+	m.ghEnabled = cfg.GitHub.Enabled(gh.Available())
+	m.herdrInside = cfg.Herdr.Enabled(herdr.Inside())
 	m.syncErrors()
 	return m
 }

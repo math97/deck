@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -166,4 +167,33 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// PostComment publica um comentário num pull request, lendo o corpo de um
+// arquivo. Devolve a URL do comentário criado quando o gh a reporta.
+//
+// É uma ação pública e que não dá para desfazer direito: quem chama tem de ter
+// obtido confirmação antes.
+func PostComment(ctx context.Context, prURL, bodyFile string) (string, error) {
+	if strings.TrimSpace(prURL) == "" {
+		return "", fmt.Errorf("card sem github_pr")
+	}
+	if _, err := os.Stat(bodyFile); err != nil {
+		return "", fmt.Errorf("nada para publicar: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, "gh", "pr", "comment", prURL, "--body-file", bodyFile)
+	out, err := cmd.Output()
+	if err != nil {
+		var stderr string
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = strings.TrimSpace(string(ee.Stderr))
+		}
+		if stderr == "" {
+			stderr = err.Error()
+		}
+		return "", fmt.Errorf("gh pr comment: %s", firstLine(stderr))
+	}
+	// O gh imprime a URL do comentário; se mudar, o vazio não atrapalha.
+	return strings.TrimSpace(string(out)), nil
 }

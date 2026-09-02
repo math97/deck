@@ -34,10 +34,12 @@ faz com `.git`.
 
 ```
 .deck/
+  config.md          o que está ligado: github, herdr
   columns/
     todo.md          frontmatter = config da coluna, corpo = prompt do agente
     refine.md
     in-progress.md
+    code-review.md
     qa.md
     done.md
   cards/
@@ -115,6 +117,22 @@ Variáveis disponíveis: `{{card_path}}`, `{{card_dir}}`, `{{card_id}}`,
 `{{card_title}}`, `{{output_path}}`, `{{artifacts}}`, `{{column}}`,
 `{{to_column}}`, `{{cwd}}`, `{{github_pr}}`.
 
+## Configuração
+
+`.deck/config.md` é o arquivo central — o que o board tem ligado:
+
+```markdown
+---
+github: auto          # on | off | auto
+herdr: auto           # on | off | auto
+github_auto_post: off # publicar review no PR sem perguntar
+---
+```
+
+`auto` liga a integração quando a ferramenta está disponível. É o padrão, e faz
+o board funcionar sem configuração nenhuma; `off` desliga mesmo com a ferramenta
+instalada. O corpo do arquivo é livre — anote ali o que quiser sobre o board.
+
 ## GitHub
 
 Ponha o link no frontmatter do card:
@@ -130,6 +148,23 @@ aparece o resumo completo, e `o` abre o PR no browser.
 
 Requer `gh auth login`. Sem isso o deck simplesmente não mostra badges — nada
 quebra.
+
+### Coluna de Code Review
+
+A coluna **Code Review** tem `post_review: on` no frontmatter. O agente dela
+escreve o review em `code-review.md`, já em markdown pronto para publicação, e
+`R` publica esse mesmo conteúdo como comentário no PR.
+
+O conteúdo é um só, em dois lugares: fica no PR para o time e no card como
+documento, ao lado do refinamento e do plano.
+
+**`R` pede confirmação antes de publicar.** Comentar num PR é público e não dá
+para desfazer direito, então não é algo que deva acontecer por um toque de tecla
+distraído. Para abrir mão da confirmação, ligue `github_auto_post` no
+`config.md`.
+
+Qualquer coluna pode virar coluna de review: basta `post_review: on` no
+frontmatter dela.
 
 ## Agentes (herdr)
 
@@ -194,6 +229,7 @@ precisar estar olhando o board.
 | `o` | abrir o PR do card no browser |
 | `s` | subir um agente com o prompt da coluna |
 | `f` | pular para o pane do agente |
+| `R` | publicar o review no PR (pede confirmação) |
 | `n` | novo card na coluna focada |
 | `e` | editar o card no `$EDITOR` |
 | `p` | editar a coluna — título, config e prompt |

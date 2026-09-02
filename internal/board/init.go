@@ -8,11 +8,12 @@ import (
 
 // defaultColumn é o template de uma coluna criada pelo init.
 type defaultColumn struct {
-	key       string
-	title     string
-	order     int
-	agentKind string
-	prompt    string
+	key        string
+	title      string
+	order      int
+	agentKind  string
+	prompt     string
+	postReview bool
 }
 
 // As colunas padrão. Colunas sem prompt (To Do, Done) são pontos de parada:
@@ -49,6 +50,24 @@ Grave um plano curto antes de executar: o que vai mudar, em quais arquivos, e
 o que fica de fora. Ao terminar, registre o que de fato mudou.`,
 	},
 	{
+		key: "code-review", title: "Code Review", order: 35, agentKind: "claude",
+		postReview: true,
+		prompt: `Revise o código desta tarefa. O card está em {{card_path}}.
+
+Leia o refinamento e o registro da implementação — estão no rodapé deste
+prompt. Revise o diff contra o que a tarefa se propôs a fazer, não contra o
+que você faria diferente.
+
+Escreva o review em markdown, pronto para ser publicado no pull request:
+- comece por um parágrafo curto dizendo se está bom para merge
+- depois, os pontos, do mais grave ao menos grave
+- cada ponto cita arquivo e linha, e diz o que fazer
+- não aponte estilo que o linter já cobre
+
+Se não houver nada a apontar, diga isso em uma linha. Review longo por
+educação desperdiça o tempo de quem lê.`,
+	},
+	{
 		key: "qa", title: "QA", order: 40, agentKind: "claude",
 		prompt: `Monte e execute o plano de testes da tarefa em {{card_path}}.
 
@@ -80,19 +99,32 @@ func Init(dir string) (string, []string, error) {
 		}
 	}
 
+	// Arquivo central: o que o board tem ligado.
+	cfgPath := filepath.Join(root, ConfigFileName)
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		cfg := DefaultConfig()
+		cfg.Path = cfgPath
+		cfg.Body = configBody
+		if err := cfg.Save(); err != nil {
+			return "", nil, fmt.Errorf("criando %s: %w", ConfigFileName, err)
+		}
+		created = append(created, ConfigFileName)
+	}
+
 	for _, dc := range defaultColumns {
 		path := filepath.Join(root, "columns", dc.key+".md")
 		if _, err := os.Stat(path); err == nil {
 			continue // já existe: preserva o que o usuário editou
 		}
 		col := &Column{
-			Key:       dc.key,
-			Path:      path,
-			Title:     dc.title,
-			Order:     dc.order,
-			AgentKind: dc.agentKind,
-			Prompt:    dc.prompt,
-			doc:       &Doc{},
+			Key:        dc.key,
+			Path:       path,
+			Title:      dc.title,
+			Order:      dc.order,
+			AgentKind:  dc.agentKind,
+			Prompt:     dc.prompt,
+			PostReview: dc.postReview,
+			doc:        &Doc{},
 		}
 		if err := col.Save(); err != nil {
 			return "", nil, fmt.Errorf("criando coluna %s: %w", dc.key, err)
@@ -102,3 +134,22 @@ func Init(dir string) (string, []string, error) {
 
 	return root, created, nil
 }
+
+// configBody é a explicação que acompanha o config.md, para o arquivo se
+// explicar sozinho quando você o abrir daqui a três meses.
+const configBody = `# Configuração do board
+
+Os interruptores acima aceitam ` + "`on`" + `, ` + "`off`" + ` ou ` + "`auto`" + `.
+` + "`auto`" + ` liga a integração quando a ferramenta está disponível — é o padrão,
+e faz o board funcionar sem configuração nenhuma.
+
+- **github** — badges de PR nos cards e publicação de review.
+  Precisa de ` + "`gh auth login`" + `.
+- **herdr** — disparar e acompanhar agentes. Só funciona com o deck aberto
+  dentro de um pane do herdr.
+- **github_auto_post** — publica o review no PR sem perguntar. Desligado por
+  padrão: comentar num PR é público e não dá para desfazer direito, então cada
+  publicação passa por uma confirmação até você dizer o contrário.
+
+Este corpo é livre: anote aqui o que quiser sobre o board.
+`

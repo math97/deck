@@ -19,7 +19,11 @@ type Column struct {
 	AgentKind string
 	WIPLimit  int
 	Prompt    string
-	doc       *Doc
+
+	// PostReview marca a coluna cujo artefato é um review destinado ao PR.
+	PostReview bool
+
+	doc *Doc
 }
 
 // HasPrompt informa se mover um card para cá deve oferecer disparo de agente.
@@ -81,6 +85,7 @@ func (c *Card) Artifact(columnKey string) *Artifact {
 // Board é o estado carregado do disco.
 type Board struct {
 	Root    string // diretório .deck
+	Config  *Config
 	Columns []*Column
 	Cards   []*Card
 	Errors  []string // problemas não fatais, exibidos na barra de status
