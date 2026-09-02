@@ -203,9 +203,14 @@ func (b *Board) ShiftColumn(col *Column, delta int) error {
 	return nil
 }
 
-// DeleteColumn remove uma coluna vazia. Recusa se houver cards, para que
-// remover uma coluna nunca destrua trabalho por acidente.
-func (b *Board) DeleteColumn(col *Column) error {
+// ArchiveColumn tira uma coluna vazia do board, movendo o arquivo para
+// .deck/archive/columns/ em vez de apagá-lo.
+//
+// A coluna carrega o prompt — o trabalho de escrever como o agente deve se
+// comportar naquela etapa. Apagar isso por uma tecla era destrutivo demais;
+// arquivada, ela volta com um `mv`. As colunas padrão também voltam com
+// `deck init`, que só recria o que falta.
+func (b *Board) ArchiveColumn(col *Column) error {
 	if col.Key == OrphanColumn {
 		return fmt.Errorf("a coluna órfã some sozinha quando os cards forem realocados")
 	}
@@ -215,7 +220,20 @@ func (b *Board) DeleteColumn(col *Column) error {
 	if len(b.Columns) <= 1 {
 		return fmt.Errorf("o board precisa de pelo menos uma coluna")
 	}
-	return os.Remove(col.Path)
+
+	dir := filepath.Join(b.ArchiveDir(), "columns")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	target := filepath.Join(dir, col.Key+".md")
+	for n := 2; ; n++ {
+		if _, err := os.Stat(target); os.IsNotExist(err) {
+			break
+		}
+		target = filepath.Join(dir, fmt.Sprintf("%s-%d.md", col.Key, n))
+	}
+	return os.Rename(col.Path, target)
 }
 
 // ArchiveDirName guarda os cards tirados do board.

@@ -24,6 +24,8 @@ func (m Model) View() string {
 	switch m.mode {
 	case modeHelp:
 		return m.viewHelp()
+	case modeErrors:
+		return m.viewErrors()
 	case modeDetail:
 		return m.viewDetail()
 	case modeConfirm:
@@ -207,32 +209,44 @@ func (m Model) viewFooter() string {
 		return stylePrompt.Render(label+":") + " " + m.input.View()
 	}
 
+	prefix := ""
+
+	// Agentes esperando resposta viram um contador global. Com a rolagem, o
+	// card que precisa de você pode estar fora da tela; o número não some.
+	if n := m.countWaiting(); n > 0 {
+		plural := "agente espera"
+		if n > 1 {
+			plural = "agentes esperam"
+		}
+		prefix += styleBadgeBad.Render(fmt.Sprintf(" ◆ %d %s ", n, plural))
+	}
+
 	// O filtro ativo é um prefixo permanente, não uma mensagem: ele convive
 	// com o status em vez de competir, senão você esquece que está filtrando e
 	// acha que os cards sumiram.
-	prefix := ""
 	if m.filter != "" {
 		n := 0
 		for _, col := range m.columns() {
 			n += len(m.cardsIn(col.Key))
 		}
-		prefix = stylePrompt.Render(fmt.Sprintf(" filtro %q", m.filter)) +
+		prefix += stylePrompt.Render(fmt.Sprintf(" filtro %q", m.filter)) +
 			styleCardMeta.Render(fmt.Sprintf(" %d card(s) ", n))
 	}
 
-	if m.errMsg != "" {
-		return prefix + styleErrBar.Render("⚠ "+m.errMsg)
+	// Problemas do board são um chip, não uma mensagem que engole o rodapé:
+	// um card órfão é permanente até você arrumá-lo, e não pode custar o guia
+	// de teclas pelo resto da sessão. `!` abre a lista completa.
+	if n := len(m.b.Errors); n > 0 {
+		prefix += styleErrBar.Render(fmt.Sprintf(" ⚠ %d ", n)) +
+			styleCardMeta.Render("! ")
 	}
+
 	if m.status != "" {
 		if m.statusOK {
 			return prefix + styleOKBar.Render("✓ "+m.status)
 		}
 		return prefix + styleErrBar.Render("✗ "+m.status)
 	}
-	if prefix != "" {
-		return prefix + styleStatus.Render("esc limpa o filtro")
-	}
-
 	hints := "h/l colunas · j/k cards · H/L mover · n novo · e editar"
 	if m.herdrInside {
 		hints += " · s agente · f pane"
@@ -240,8 +254,11 @@ func (m Model) viewFooter() string {
 	if m.ghEnabled {
 		hints += " · R review"
 	}
+	if m.filter != "" {
+		hints = "esc limpa o filtro · " + hints
+	}
 	hints += " · ? ajuda · q sair"
-	return styleStatus.Render(hints)
+	return prefix + styleStatus.Render(hints)
 }
 
 // viewConfirm desenha a pergunta no rodapé. O rótulo deixa explícito que o
@@ -343,6 +360,22 @@ func (m Model) viewDetail() string {
 	return lipgloss.JoinVertical(lipgloss.Left, box, hint)
 }
 
+// viewErrors lista os problemas encontrados ao carregar o board.
+func (m Model) viewErrors() string {
+	var lines []string
+	for _, e := range m.b.Errors {
+		lines = append(lines, styleErrBar.Render("⚠ ")+styleHelpDesc.Render(e))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, styleHelpDesc.Render("nenhum problema"))
+	}
+
+	content := styleColTitleFocus.Render("problemas no board") + "\n\n" +
+		strings.Join(lines, "\n") + "\n\n" +
+		styleHelpDesc.Render("cards sem coluna válida aparecem na coluna ? —\nmova-os com H/L ou corrija o campo column no arquivo.")
+	return styleOverlay.Render(content) + "\n" + styleStatus.Render("qualquer tecla fecha")
+}
+
 func (m Model) viewHelp() string {
 	rows := [][2]string{
 		{"h / l", "coluna anterior / próxima"},
@@ -370,6 +403,7 @@ func (m Model) viewHelp() string {
 		{"< / >", "reordenar a coluna"},
 		{"x", "remover a coluna (só se estiver vazia)"},
 		{"", ""},
+		{"!", "listar os problemas do board"},
 		{"?", "esta ajuda"},
 		{"q", "sair"},
 	}

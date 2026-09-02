@@ -1193,3 +1193,118 @@ func TestDetailRendersMarkdown(t *testing.T) {
 		t.Error("o detalhe deveria sair estilizado")
 	}
 }
+
+func TestArchiveColumnAsksAndPreservesFile(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "l", "l", "l") // code-review, que tem prompt
+
+	if m.currentColumn().Key != "code-review" {
+		t.Fatalf("esperava code-review, está em %q", m.currentColumn().Key)
+	}
+	before := len(m.columns())
+
+	m = press(t, m, "x")
+	if m.mode != modeConfirm {
+		t.Fatal("remover coluna deveria pedir confirmação")
+	}
+	if !strings.Contains(plain(m.View()), "tem prompt escrito") {
+		t.Errorf("a confirmação deveria avisar que há prompt:\n%s", plain(m.View()))
+	}
+
+	// Cancelar mantém tudo.
+	m = press(t, m, "n")
+	if len(m.columns()) != before {
+		t.Fatal("cancelar não deveria remover a coluna")
+	}
+
+	// Confirmar arquiva, sem apagar.
+	m = press(t, m, "x")
+	m = press(t, m, "s")
+	if len(m.columns()) != before-1 {
+		t.Errorf("coluna deveria ter saído do board: %d", len(m.columns()))
+	}
+
+	arq := filepath.Join(m.root, board.ArchiveDirName, "columns", "code-review.md")
+	raw, err := os.ReadFile(arq)
+	if err != nil {
+		t.Fatalf("a coluna deveria ter sido arquivada, não apagada: %v", err)
+	}
+	if !strings.Contains(string(raw), "Revise o código") {
+		t.Error("o prompt deveria ter sobrevivido ao arquivamento")
+	}
+}
+
+func TestArchiveColumnRefusesWithCardsBeforeAsking(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "ocupa")
+	m = press(t, m, "enter")
+
+	m = press(t, m, "x")
+	if m.mode == modeConfirm {
+		t.Error("não deveria nem perguntar se a coluna tem cards")
+	}
+	if m.statusOK || !strings.Contains(m.status, "mova-os") {
+		t.Errorf("deveria explicar por que recusou, veio %q", m.status)
+	}
+}
+
+func TestWaitingCounterAppearsInFooter(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "espera", "card-espera")
+	m.agents["card-espera"] = herdr.Agent{Name: "card-espera", Status: herdr.StatusBlocked}
+
+	out := plain(m.View())
+	if !strings.Contains(out, "1 agente espera") {
+		t.Errorf("o rodapé deveria contar quem espera resposta:\n%s", out)
+	}
+	if !strings.Contains(out, "te espera") {
+		t.Errorf("o card deveria dizer que o agente espera você:\n%s", out)
+	}
+
+	// Plural.
+	m.agents["outro"] = herdr.Agent{Name: "outro", Status: herdr.StatusBlocked}
+	if !strings.Contains(plain(m.View()), "2 agentes esperam") {
+		t.Error("deveria pluralizar")
+	}
+
+	// Quem está trabalhando não conta.
+	m.agents["outro"] = herdr.Agent{Name: "outro", Status: herdr.StatusWorking}
+	if !strings.Contains(plain(m.View()), "1 agente espera") {
+		t.Error("só bloqueados deveriam contar")
+	}
+}
+
+func TestBoardErrorsDoNotEatTheHints(t *testing.T) {
+	m := newTestModel(t)
+	// Card apontando para coluna inexistente: erro permanente até ser corrigido.
+	os.WriteFile(filepath.Join(m.root, "cards", "orfao.md"),
+		[]byte("---\nid: orfao\ncolumn: fantasma\n---\n"), 0o644)
+	m.reload()
+
+	if len(m.b.Errors) == 0 {
+		t.Fatal("o board deveria ter registrado o problema")
+	}
+
+	out := plain(m.View())
+	if !strings.Contains(out, "⚠ 1") {
+		t.Errorf("deveria haver um chip de problema:\n%s", out)
+	}
+	// O ponto do conserto: as teclas continuam visíveis.
+	if !strings.Contains(out, "? ajuda") || !strings.Contains(out, "q sair") {
+		t.Errorf("o guia de teclas não pode ser engolido pelo erro:\n%s", out)
+	}
+
+	// E a lista completa fica a uma tecla.
+	m = press(t, m, "!")
+	if m.mode != modeErrors {
+		t.Fatal("'!' deveria abrir a lista de problemas")
+	}
+	det := plain(m.View())
+	if !strings.Contains(det, "coluna inexistente") {
+		t.Errorf("a lista deveria explicar o problema:\n%s", det)
+	}
+	if !strings.Contains(det, "coluna ?") {
+		t.Errorf("deveria dizer onde os cards foram parar:\n%s", det)
+	}
+}
