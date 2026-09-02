@@ -131,6 +131,28 @@ aparece o resumo completo, e `o` abre o PR no browser.
 Requer `gh auth login`. Sem isso o deck simplesmente não mostra badges — nada
 quebra.
 
+## Agentes (herdr)
+
+Com o deck aberto **dentro de um pane do [herdr](https://herdr.dev)**, `s` num
+card dispara um agente:
+
+1. `pane split --no-focus` — direção escolhida pela geometria do pane, como o
+   herdr recomenda: pane largo divide à direita, estreito divide para baixo
+2. `agent start card-<id> --kind <agent_kind da coluna>`
+3. `agent prompt` com o prompt da coluna já renderizado, artefatos anteriores
+   incluídos
+
+O nome e o pane do agente ficam gravados no frontmatter do card, e a transição
+entra no `## Log`.
+
+Um poller de 2s casa `agent list` com os cards e mostra o estado:
+`● trabalhando` · `◐ bloqueado` · `✓ pronto` · `○ ocioso`. **Cards bloqueados ou
+prontos sobem para o topo da coluna** — é o que precisa de você. `f` pula para o
+pane do agente.
+
+Fora de uma sessão do herdr o board funciona igual; `s` e `f` avisam em vez de
+tentar. O deck nunca dirige uma sessão de fora dela.
+
 ## Teclas
 
 | tecla | ação |
@@ -143,6 +165,8 @@ quebra.
 | `enter` | abrir o card (abas: card + um artefato por coluna) |
 | `tab` | próxima aba no detalhe do card |
 | `o` | abrir o PR do card no browser |
+| `s` | subir um agente com o prompt da coluna |
+| `f` | pular para o pane do agente |
 | `n` | novo card na coluna focada |
 | `e` | editar o card no `$EDITOR` |
 | `p` | editar a coluna — título, config e prompt |
@@ -171,16 +195,16 @@ board assim que qualquer arquivo muda — inclusive quando um agente edita um ca
 
 ## Estado
 
-Fases 1 e 2 concluídas: board navegável, colunas e prompts editáveis, cards
+Fases 1 a 3 concluídas: board navegável, colunas e prompts editáveis, cards
 criados e movidos com log automático, artefatos por coluna com promoção
-automática a pasta, abas no detalhe do card, e badges de PR via `gh`.
+automática a pasta, abas no detalhe, badges de PR via `gh`, e disparo e
+acompanhamento de agentes via herdr.
 
-Próximas fases:
+Próxima fase:
 
-3. Integração com o [herdr](https://herdr.dev): `a` dispara um agente com o
-   prompt da coluna, badge de estado (`working` / `blocked` / `done`) por card,
-   `f` pula para o pane
-4. Captura do resultado do agente de volta no artefato e no `## Log`
+4. Captura automática do resultado quando o agente fica `done`: `agent read`
+   anexa o resumo ao artefato e ao `## Log`, e `herdr notification` avisa quando
+   algo bloqueia
 
 Depois: renderização com glamour, busca, checkboxes marcáveis, e integração com
 Jira como terceira fonte ao lado do GitHub.

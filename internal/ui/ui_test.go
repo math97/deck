@@ -8,6 +8,7 @@ import (
 
 	"github.com/matheusalbuquerque/deck/internal/board"
 	"github.com/matheusalbuquerque/deck/internal/gh"
+	"github.com/matheusalbuquerque/deck/internal/herdr"
 )
 
 // newTestModel monta um board temporário e o modelo já dimensionado.
@@ -390,5 +391,163 @@ func TestOpenPRWithoutLinkWarns(t *testing.T) {
 	m = press(t, m, "o")
 	if m.status == "" || m.statusOK {
 		t.Error("deveria avisar que o card não tem github_pr")
+	}
+}
+
+func TestBlockedCardsRiseToTop(t *testing.T) {
+	m := newTestModel(t)
+	for _, title := range []string{"primeira", "segunda", "terceira"} {
+		m = press(t, m, "n")
+		m = typeText(t, m, title)
+		m = press(t, m, "enter")
+	}
+
+	// A terceira ganha um agente bloqueado.
+	cards := m.b.CardsIn("todo")
+	target := cards[len(cards)-1]
+	target.Agent = &board.AgentRef{Name: "card-terceira", Pane: "w1:p3", Kind: "claude"}
+	if err := target.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	m.reload()
+	m.agents["card-terceira"] = herdr.Agent{
+		Name: "card-terceira", PaneID: "w1:p3", Status: herdr.StatusBlocked,
+	}
+
+	got := m.cardsIn("todo")
+	if got[0].Title != target.Title {
+		t.Errorf("card bloqueado deveria estar no topo, no topo está %q", got[0].Title)
+	}
+	if len(got) != 3 {
+		t.Errorf("reordenar não pode perder card: %d", len(got))
+	}
+}
+
+func TestCursorFollowsDisplayOrder(t *testing.T) {
+	m := newTestModel(t)
+	for _, title := range []string{"primeira", "segunda"} {
+		m = press(t, m, "n")
+		m = typeText(t, m, title)
+		m = press(t, m, "enter")
+	}
+
+	last := m.b.CardsIn("todo")[1]
+	last.Agent = &board.AgentRef{Name: "card-x", Pane: "w1:p2"}
+	last.Save()
+	m.reload()
+	m.agents["card-x"] = herdr.Agent{Name: "card-x", Status: herdr.StatusBlocked}
+
+	// O cursor no índice 0 tem que apontar para o mesmo card que a view desenha
+	// primeiro, senão selecionar e mover agiriam sobre o card errado.
+	m.cardIdx = 0
+	if m.currentCard().Title != m.cardsIn("todo")[0].Title {
+		t.Error("cursor e ordem de exibição divergiram")
+	}
+}
+
+func TestAgentBadgeRendersOnCard(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com agente")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Agent = &board.AgentRef{Name: "card-com-agente", Pane: "w1:p2"}
+	card.Save()
+	m.reload()
+	m.agents["card-com-agente"] = herdr.Agent{
+		Name: "card-com-agente", Status: herdr.StatusWorking,
+	}
+
+	if !strings.Contains(m.View(), "trabalhando") {
+		t.Errorf("card deveria mostrar o badge do agente:\n%s", m.View())
+	}
+}
+
+func TestStartAgentOutsideHerdrWarns(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+	m = press(t, m, "L") // vai para Refine, que tem prompt
+
+	m.herdrInside = false
+	m = press(t, m, "s")
+
+	if m.statusOK || !strings.Contains(m.status, "herdr") {
+		t.Errorf("deveria avisar que está fora do herdr, status=%q", m.status)
+	}
+}
+
+func TestStartAgentRefusedOnColumnWithoutPrompt(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+
+	m.herdrInside = true
+	m = press(t, m, "s") // ainda em To Do, que não tem prompt
+
+	if m.statusOK || !strings.Contains(m.status, "prompt") {
+		t.Errorf("deveria recusar coluna sem prompt, status=%q", m.status)
+	}
+}
+
+func TestStartAgentRefusedWhenAlreadyRunning(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+	m = press(t, m, "L")
+
+	card := m.currentCard()
+	card.Agent = &board.AgentRef{Name: "card-tarefa", Pane: "w1:p2"}
+	card.Save()
+	m.reload()
+	m.agents["card-tarefa"] = herdr.Agent{Name: "card-tarefa", Status: herdr.StatusWorking}
+	m.herdrInside = true
+
+	m = press(t, m, "s")
+	if m.statusOK || !strings.Contains(m.status, "já tem agente") {
+		t.Errorf("deveria recusar disparar em cima de agente vivo, status=%q", m.status)
+	}
+}
+
+func TestLinkAgentPersistsToCard(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	m.linkAgent(card, &herdr.Agent{Name: "card-tarefa", PaneID: "w1:p7", Kind: "claude"})
+
+	b2, err := board.Load(m.root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := b2.CardsIn("todo")[0]
+	if got.Agent == nil {
+		t.Fatal("a ligação com o agente não persistiu no frontmatter")
+	}
+	if got.Agent.Name != "card-tarefa" || got.Agent.Pane != "w1:p7" {
+		t.Errorf("agente gravado errado: %+v", got.Agent)
+	}
+	if !strings.Contains(got.Body, "card-tarefa") {
+		t.Errorf("o log deveria registrar o agente:\n%s", got.Body)
+	}
+}
+
+func TestFocusAgentWithoutAgentWarns(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "tarefa")
+	m = press(t, m, "enter")
+
+	m.herdrInside = true
+	m = press(t, m, "f")
+
+	if m.statusOK || !strings.Contains(m.status, "agente") {
+		t.Errorf("deveria avisar que não há agente, status=%q", m.status)
 	}
 }
