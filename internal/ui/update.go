@@ -250,6 +250,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "R":
 		return m.askPostReview()
 
+	case "d":
+		return m.askArchiveCard()
+
 	// --- colunas ---
 	case "p":
 		col := m.currentColumn()
@@ -627,4 +630,38 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus(false, "cancelado")
 		return m, clearStatusCmd()
 	}
+}
+
+// askArchiveCard tira o card do board, com confirmação.
+//
+// Arquivar move o card (e os artefatos, quando houver) para .deck/archive/.
+// Nada é destruído — mas some da tela, e some da tela sem aviso é o tipo de
+// coisa que assusta, então confirma.
+func (m Model) askArchiveCard() (tea.Model, tea.Cmd) {
+	card := m.currentCard()
+	if card == nil {
+		m.setStatus(false, "nenhum card selecionado")
+		return m, clearStatusCmd()
+	}
+
+	detail := card.Title
+	if n := len(card.Artifacts); n > 0 {
+		detail += fmt.Sprintf(" (+%d artefato(s))", n)
+	}
+
+	m.mode = modeConfirm
+	m.confirm = confirmState{
+		question: "Arquivar este card?",
+		detail:   detail,
+		action: func(mm Model) (tea.Model, tea.Cmd) {
+			if err := mm.b.ArchiveCard(card); err != nil {
+				mm.setStatus(false, "%v", err)
+				return mm, clearStatusCmd()
+			}
+			mm.reload()
+			mm.setStatus(true, "arquivado em .deck/archive — nada foi apagado")
+			return mm, clearStatusCmd()
+		},
+	}
+	return m, nil
 }

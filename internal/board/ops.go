@@ -217,3 +217,57 @@ func (b *Board) DeleteColumn(col *Column) error {
 	}
 	return os.Remove(col.Path)
 }
+
+// ArchiveDirName guarda os cards tirados do board.
+const ArchiveDirName = "archive"
+
+// ArchiveDir é onde os cards arquivados moram.
+func (b *Board) ArchiveDir() string { return filepath.Join(b.Root, ArchiveDirName) }
+
+// ArchiveCard tira o card do board sem destruí-lo: move o arquivo (ou a pasta
+// inteira, com os artefatos) para .deck/archive/.
+//
+// Arquivar em vez de apagar é deliberado. O board precisa de uma saída para não
+// acumular Done até o fim dos tempos, mas trabalho refinado, implementado e
+// revisado não pode sumir por causa de uma tecla. Para apagar de verdade, o
+// usuário apaga a pasta — uma ação explícita, fora do TUI.
+func (b *Board) ArchiveCard(card *Card) error {
+	dir := b.ArchiveDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	// O que se move é a pasta do card, quando ele tiver uma; senão, o arquivo.
+	source := card.Path
+	if card.IsFolder() {
+		source = card.Dir
+	}
+	target := filepath.Join(dir, filepath.Base(source))
+
+	// Nunca sobrescreve um arquivamento anterior do mesmo nome.
+	for n := 2; ; n++ {
+		if _, err := os.Stat(target); os.IsNotExist(err) {
+			break
+		}
+		base := filepath.Base(source)
+		ext := ""
+		if !card.IsFolder() {
+			ext = ".md"
+			base = strings.TrimSuffix(base, ext)
+		}
+		target = filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, n, ext))
+	}
+
+	if err := os.Rename(source, target); err != nil {
+		return err
+	}
+
+	// Remove do board em memória, para a tela refletir na hora.
+	for i, c := range b.Cards {
+		if c.Path == card.Path {
+			b.Cards = append(b.Cards[:i], b.Cards[i+1:]...)
+			break
+		}
+	}
+	return nil
+}

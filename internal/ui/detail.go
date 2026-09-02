@@ -44,14 +44,31 @@ func (m Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "q":
 		m.mode = modeNormal
 		m.tabIdx = 0
+		m.detailOffset = 0
 		return m, nil
 
 	case "tab", "right", "l":
 		m.tabIdx = (m.tabIdx + 1) % n
+		m.detailOffset = 0 // trocar de aba volta ao topo
 		return m, nil
 
 	case "shift+tab", "left", "h":
 		m.tabIdx = (m.tabIdx - 1 + n) % n
+		m.detailOffset = 0
+		return m, nil
+
+	case "j", "down":
+		m.detailOffset++
+		return m, nil
+
+	case "k", "up":
+		if m.detailOffset > 0 {
+			m.detailOffset--
+		}
+		return m, nil
+
+	case "g":
+		m.detailOffset = 0
 		return m, nil
 
 	case "e":

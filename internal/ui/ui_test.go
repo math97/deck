@@ -832,3 +832,131 @@ func TestShortPR(t *testing.T) {
 		}
 	}
 }
+
+func TestArchiveCardAsksAndMovesToArchive(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "para arquivar")
+	m = press(t, m, "enter")
+	card := m.currentCard()
+	card.WriteArtifact("refine", "trabalho feito")
+	m.reload()
+
+	m = press(t, m, "d")
+	if m.mode != modeConfirm {
+		t.Fatal("arquivar deveria pedir confirmação")
+	}
+	if !strings.Contains(m.View(), "artefato") {
+		t.Errorf("a confirmação deveria avisar que há artefatos:\n%s", m.View())
+	}
+
+	m = press(t, m, "s")
+	if len(m.b.CardsIn("todo")) != 0 {
+		t.Error("card deveria ter saído do board")
+	}
+
+	// E continua existindo no disco — arquivar não apaga.
+	entries, err := os.ReadDir(filepath.Join(m.root, board.ArchiveDirName))
+	if err != nil {
+		t.Fatalf("pasta de arquivo não criada: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("esperava 1 item arquivado, veio %d", len(entries))
+	}
+	// Como o card tinha artefato, virou pasta — que foi movida inteira.
+	arq := filepath.Join(m.root, board.ArchiveDirName, entries[0].Name())
+	if _, err := os.Stat(filepath.Join(arq, "refine.md")); err != nil {
+		t.Error("o artefato deveria ter ido junto para o arquivo")
+	}
+}
+
+func TestArchiveCanBeCancelled(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "fica")
+	m = press(t, m, "enter")
+
+	m = press(t, m, "d")
+	m = press(t, m, "n") // qualquer tecla não afirmativa cancela
+
+	if len(m.b.CardsIn("todo")) != 1 {
+		t.Error("cancelar não deveria arquivar")
+	}
+}
+
+func TestColumnShowsScrollIndicatorWhenFull(t *testing.T) {
+	m := newTestModel(t)
+	m.height = 14 // espaço para poucos cards
+	for i := 0; i < 8; i++ {
+		m = press(t, m, "n")
+		m = typeText(t, m, "card")
+		m = press(t, m, "enter")
+	}
+
+	// Com o cursor no último card, a janela rolou até o fim: há cards acima.
+	if out := m.View(); !strings.Contains(out, "↑") {
+		t.Errorf("cursor no fim deveria indicar cards acima:\n%s", out)
+	}
+
+	// Voltando ao topo, o indicador inverte.
+	m = press(t, m, "g")
+	out := m.View()
+	if !strings.Contains(out, "↓") {
+		t.Errorf("cursor no topo deveria indicar cards abaixo:\n%s", out)
+	}
+	if strings.Contains(out, "↑") {
+		t.Errorf("no topo não deveria haver nada acima:\n%s", out)
+	}
+}
+
+func TestBoardShowsHorizontalIndicatorWhenNarrow(t *testing.T) {
+	m := newTestModel(t)
+	m.width = 40 // cabe uma ou duas colunas das seis
+
+	out := m.View()
+	if !strings.Contains(out, "›") {
+		t.Errorf("board estreito deveria indicar colunas fora da tela:\n%s", out)
+	}
+}
+
+func TestDetailScrolls(t *testing.T) {
+	m := newTestModel(t)
+	m.height = 20
+	m = press(t, m, "n")
+	m = typeText(t, m, "longo")
+	m = press(t, m, "enter")
+
+	// Corpo maior que a janela.
+	card := m.currentCard()
+	body := ""
+	for i := 0; i < 60; i++ {
+		body += "linha de conteúdo\n"
+	}
+	card.Body = body
+	card.Save()
+	m.reload()
+
+	m = press(t, m, "enter")
+	first := m.View()
+	if !strings.Contains(first, "linha 1-") {
+		t.Errorf("detalhe longo deveria mostrar a posição:\n%s", first)
+	}
+
+	m = press(t, m, "j", "j", "j")
+	if m.detailOffset != 3 {
+		t.Errorf("j deveria rolar, offset=%d", m.detailOffset)
+	}
+	if strings.Contains(m.View(), "linha 1-") {
+		t.Error("a janela deveria ter andado")
+	}
+
+	m = press(t, m, "g")
+	if m.detailOffset != 0 {
+		t.Error("g deveria voltar ao topo")
+	}
+	// k no topo não pode ir a negativo.
+	m = press(t, m, "k", "k")
+	if m.detailOffset != 0 {
+		t.Errorf("offset não pode ficar negativo: %d", m.detailOffset)
+	}
+}

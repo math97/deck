@@ -236,6 +236,7 @@ precisar estar olhando o board.
 | `a` | nova coluna |
 | `r` | renomear a coluna focada |
 | `<` `>` | reordenar a coluna |
+| `d` | arquivar o card (pede confirmação) |
 | `x` | remover a coluna (só se estiver vazia) |
 | `?` | ajuda |
 | `q` | sair |
@@ -244,6 +245,21 @@ precisar estar olhando o board.
 
 `.deck/` é feito para ser editado à mão. Um watcher de filesystem redesenha o
 board assim que qualquer arquivo muda — inclusive quando um agente edita um card.
+
+## Arquivar
+
+`d` tira o card do board movendo-o (com os artefatos, quando houver) para
+`.deck/archive/`. **Nada é apagado** — trabalho refinado, implementado e
+revisado não pode sumir por causa de uma tecla. Para apagar de verdade, apague
+a pasta você mesmo, fora do TUI.
+
+## Quando não cabe na tela
+
+Colunas com mais cards do que a altura permite mostram `↑ N` e `↓ N`; a janela
+acompanha o cursor. O mesmo vale na horizontal: num pane estreito o board
+mostra `‹ N` e `N ›` e rola conforme você anda entre as colunas.
+
+No detalhe do card, `j`/`k` rolam o corpo e `g` volta ao topo.
 
 ## Garantias
 
