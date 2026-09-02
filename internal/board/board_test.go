@@ -183,11 +183,11 @@ func TestOrphanCardsAreNotLost(t *testing.T) {
 	_ = card
 }
 
-func TestDeleteColumnRefusesWhenOccupied(t *testing.T) {
+func TestArchiveColumnRefusesWhenOccupied(t *testing.T) {
 	b := setup(t)
 	b.NewCard("ocupa", "qa")
 
-	if err := b.DeleteColumn(b.Column("qa")); err == nil {
+	if err := b.ArchiveColumn(b.Column("qa")); err == nil {
 		t.Error("deveria recusar remover coluna com cards")
 	}
 	if _, err := os.Stat(b.Column("qa").Path); err != nil {

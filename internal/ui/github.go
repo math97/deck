@@ -67,3 +67,11 @@ func scheduleGitHubPoll() tea.Cmd {
 }
 
 type ghTickMsg struct{}
+
+// ghAuthMsg traz o resultado da verificação de autenticação.
+type ghAuthMsg struct{ ok bool }
+
+// checkGitHubAuth confirma a sessão do gh fora do caminho crítico da abertura.
+func checkGitHubAuth() tea.Cmd {
+	return func() tea.Msg { return ghAuthMsg{ok: gh.Authenticated()} }
+}

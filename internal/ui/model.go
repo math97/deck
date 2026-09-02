@@ -25,6 +25,7 @@ const (
 	modeDetail      // overlay com o corpo do card
 	modeHelp
 	modeConfirm // pergunta sim/não antes de uma ação irreversível
+	modeErrors  // lista os problemas encontrados ao carregar o board
 )
 
 // confirmState é a pergunta pendente e o que fazer quando aceita.
@@ -119,7 +120,9 @@ func New(b *board.Board) Model {
 	if cfg == nil {
 		cfg = board.DefaultConfig()
 	}
-	m.ghEnabled = cfg.GitHub.Enabled(gh.Available())
+	// Só a presença do binário aqui: a checagem de sessão é feita depois, em
+	// segundo plano, para o board abrir na hora.
+	m.ghEnabled = cfg.GitHub.Enabled(gh.Installed())
 	m.herdrInside = cfg.Herdr.Enabled(herdr.Inside())
 	m.fsEvents = startWatcher(b.Root)
 	m.syncErrors()
@@ -129,7 +132,7 @@ func New(b *board.Board) Model {
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{watchCmd(m.fsEvents), tea.EnterAltScreen}
 	if m.ghEnabled {
-		cmds = append(cmds, pollGitHub(m.b.Cards), scheduleGitHubPoll())
+		cmds = append(cmds, checkGitHubAuth(), pollGitHub(m.b.Cards), scheduleGitHubPoll())
 	}
 	if m.herdrInside {
 		cmds = append(cmds, pollAgents(), scheduleAgentPoll())
@@ -205,6 +208,17 @@ func matchesCard(c *board.Card, needle string) bool {
 	return strings.Contains(strings.ToLower(c.Title), needle) ||
 		strings.Contains(strings.ToLower(c.ID), needle) ||
 		strings.Contains(strings.ToLower(c.Body), needle)
+}
+
+// countWaiting conta os agentes parados esperando resposta sua.
+func (m *Model) countWaiting() int {
+	n := 0
+	for _, a := range m.agents {
+		if a.Status == herdr.StatusBlocked {
+			n++
+		}
+	}
+	return n
 }
 
 // agentFor devolve o agente vivo ligado ao card, se houver.

@@ -29,13 +29,23 @@ type State struct {
 	Err            error // falha ao consultar; o card mostra estado degradado
 }
 
-// Available informa se o gh está instalado e autenticado. Sem isso, o deck
-// simplesmente não mostra badges — nada quebra.
-func Available() bool {
-	if _, err := exec.LookPath("gh"); err != nil {
+// Installed diz apenas se o binário existe. É instantâneo, e é o que se usa
+// para decidir a configuração inicial.
+func Installed() bool {
+	_, err := exec.LookPath("gh")
+	return err == nil
+}
+
+// Authenticated confirma que há sessão válida.
+//
+// Custa cerca de 300ms porque o gh consulta a API, então NUNCA deve ser
+// chamado na abertura do board: rode-o em segundo plano e desligue os badges
+// se falhar. Bloquear aqui atrasava a abertura do deck em todo lançamento.
+func Authenticated() bool {
+	if !Installed() {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return exec.CommandContext(ctx, "gh", "auth", "status").Run() == nil
 }

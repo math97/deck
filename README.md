@@ -191,7 +191,9 @@ O nome e o pane do agente ficam gravados no frontmatter do card, e a transição
 entra no `## Log`.
 
 Um poller de 2s casa `agent list` com os cards e mostra o estado:
-`● trabalhando` · `◐ bloqueado` · `✓ pronto` · `○ ocioso`. **Cards bloqueados ou
+`● trabalhando` · `◆ te espera` · `✓ pronto` · `○ ocioso`. O rodapé conta
+quantos agentes esperam resposta, para você não perder um card que rolou para
+fora da tela. **Cards bloqueados ou
 prontos sobem para o topo da coluna** — é o que precisa de você. `f` pula para o
 pane do agente.
 
@@ -251,7 +253,8 @@ precisar estar olhando o board.
 | `u` | colar o link do PR no card |
 | `/` | buscar em título, id e corpo; `esc` limpa |
 | `c` | fechar o pane do agente (pede confirmação) |
-| `x` | remover a coluna (só se estiver vazia) |
+| `x` | arquivar a coluna (pede confirmação; só se estiver vazia) |
+| `!` | listar os problemas do board |
 | `?` | ajuda |
 | `q` | sair |
 
@@ -263,7 +266,11 @@ board assim que qualquer arquivo muda — inclusive quando um agente edita um ca
 ## Arquivar
 
 `d` tira o card do board movendo-o (com os artefatos, quando houver) para
-`.deck/archive/`. **Nada é apagado** — trabalho refinado, implementado e
+`.deck/archive/`; `x` faz o mesmo com uma coluna vazia, indo para
+`.deck/archive/columns/`. Ambos pedem confirmação.
+
+Coluna arquivada volta com um `mv`. As colunas padrão voltam com `deck init`,
+que só recria o que falta e não toca no que você editou. **Nada é apagado** — trabalho refinado, implementado e
 revisado não pode sumir por causa de uma tecla. Para apagar de verdade, apague
 a pasta você mesmo, fora do TUI.
 

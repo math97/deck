@@ -261,7 +261,10 @@ func (s Status) Badge() string {
 	case StatusWorking:
 		return "● trabalhando"
 	case StatusBlocked:
-		return "◐ bloqueado"
+		// "bloqueado" soa como problema; o que este estado quer dizer é que o
+		// agente parou e está esperando você responder. Curto de propósito:
+		// numa coluna estreita, um badge longo quebra em duas linhas.
+		return "◆ te espera"
 	case StatusDone:
 		return "✓ pronto"
 	case StatusIdle:

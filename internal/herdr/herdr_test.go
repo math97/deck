@@ -60,7 +60,7 @@ func TestAgentNameCollisionStaysWithinLimit(t *testing.T) {
 func TestStatusBadge(t *testing.T) {
 	cases := map[Status]string{
 		StatusWorking: "● trabalhando",
-		StatusBlocked: "◐ bloqueado",
+		StatusBlocked: "◆ te espera",
 		StatusDone:    "✓ pronto",
 		StatusIdle:    "○ ocioso",
 		StatusUnknown: "· ?",

@@ -37,6 +37,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ghAuthMsg:
+		if !msg.ok {
+			m.ghEnabled = false
+			m.setStatus(false, "gh sem sessão — rode `gh auth login` para ver estado de PR")
+			return m, clearStatusCmd()
+		}
+		return m, nil
+
 	case ghTickMsg:
 		return m, tea.Batch(pollGitHub(m.b.Cards), scheduleGitHubPoll())
 
@@ -73,11 +81,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDetail(msg)
 		case modeConfirm:
 			return m.updateConfirm(msg)
-		case modeHelp:
-			switch msg.String() {
-			case "esc", "q", "enter", "?":
-				m.mode = modeNormal
-			}
+		case modeHelp, modeErrors:
+			m.mode = modeNormal
 			return m, nil
 		default:
 			return m.updateNormal(msg)
@@ -208,6 +213,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "?":
 		m.mode = modeHelp
+		return m, nil
+
+	case "!":
+		m.mode = modeErrors
 		return m, nil
 
 	// --- navegação ---
@@ -361,17 +370,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.shiftColumn(+1)
 
 	case "x":
-		col := m.currentColumn()
-		if col == nil {
-			return m, nil
-		}
-		if err := m.b.DeleteColumn(col); err != nil {
-			m.setStatus(false, "%v", err)
-			return m, clearStatusCmd()
-		}
-		m.reload()
-		m.setStatus(true, "coluna removida")
-		return m, clearStatusCmd()
+		return m.askArchiveColumn()
 	}
 
 	return m, nil
@@ -806,4 +805,42 @@ func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
 	m.reload()
 	m.setStatus(true, "agente %s liberado", msg.name)
 	return m, clearStatusCmd()
+}
+
+// askArchiveColumn tira a coluna do board, com confirmação.
+//
+// A coluna carrega o prompt — o trabalho de escrever como o agente se comporta
+// naquela etapa. Perder isso por um toque de tecla era o pior estrago que o
+// deck permitia; agora pergunta, e arquiva em vez de apagar.
+func (m Model) askArchiveColumn() (tea.Model, tea.Cmd) {
+	col := m.currentColumn()
+	if col == nil {
+		return m, nil
+	}
+	// Valida antes de perguntar: não faz sentido confirmar algo que vai falhar.
+	if m.b.HasCards(col.Key) {
+		m.setStatus(false, "%s tem cards — mova-os antes de remover", col.Title)
+		return m, clearStatusCmd()
+	}
+
+	detail := col.Title
+	if col.HasPrompt() {
+		detail += " — tem prompt escrito"
+	}
+
+	m.mode = modeConfirm
+	m.confirm = confirmState{
+		question: "Arquivar esta coluna?",
+		detail:   detail,
+		action: func(mm Model) (tea.Model, tea.Cmd) {
+			if err := mm.b.ArchiveColumn(col); err != nil {
+				mm.setStatus(false, "%v", err)
+				return mm, clearStatusCmd()
+			}
+			mm.reload()
+			mm.setStatus(true, "arquivada em .deck/archive/columns — `deck init` recria as padrão")
+			return mm, clearStatusCmd()
+		},
+	}
+	return m, nil
 }

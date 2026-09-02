@@ -62,6 +62,11 @@ frontmatter, lidos pelo mesmo parser (`internal/board/frontmatter.go`).
 **O nome do artefato é a key da coluna que o produziu.** Uma regra, zero
 configuração. Um card vira pasta automaticamente na primeira gravação.
 
+**Nada caro na abertura.** `gh auth status` custa ~300ms porque consulta a API;
+por isso `New()` usa só `gh.Installed()` (LookPath) e a sessão é verificada em
+segundo plano, por comando. Qualquer coisa que fale com processo externo segue
+essa regra.
+
 **Integração desligada nunca quebra nada.** Sem `gh` autenticado, sem herdr, ou
 com `github: off` no config: o board funciona igual, só sem aquilo.
 
