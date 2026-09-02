@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/matheusalbuquerque/deck/internal/herdr"
 )
 
 const (
@@ -69,7 +70,7 @@ func (m Model) colWidth(n int) int {
 }
 
 func (m Model) viewColumn(col *board.Column, focused bool, width, height int) string {
-	cards := m.b.CardsIn(col.Key)
+	cards := m.cardsIn(col.Key)
 
 	// Cabeçalho: título, contagem e limite de WIP quando houver.
 	count := fmt.Sprintf(" %d", len(cards))
@@ -126,6 +127,18 @@ func (m Model) viewCard(card *board.Card, selected bool, width int) string {
 	}
 	line := styleCardMeta.Render(meta)
 
+	if a, ok := m.agentFor(card); ok {
+		badge := a.Status.Badge()
+		switch a.Status {
+		case herdr.StatusBlocked:
+			line += " " + styleBadgeBad.Render(badge)
+		case herdr.StatusWorking, herdr.StatusDone:
+			line += " " + styleBadgeOK.Render(badge)
+		default:
+			line += " " + styleCardMeta.Render(badge)
+		}
+	}
+
 	if st, ok := m.ghStates[card.Path]; ok {
 		badge := st.Badge()
 		if st.Healthy() {
@@ -160,7 +173,12 @@ func (m Model) viewFooter() string {
 		}
 		return styleErrBar.Render("✗ " + m.status)
 	}
-	return styleStatus.Render("h/l colunas · j/k cards · H/L mover · n novo · e editar · p prompt · ? ajuda · q sair")
+	hints := "h/l colunas · j/k cards · H/L mover · n novo · e editar"
+	if m.herdrInside {
+		hints += " · s agente · f pane"
+	}
+	hints += " · ? ajuda · q sair"
+	return styleStatus.Render(hints)
 }
 
 // viewDetail mostra o card e seus artefatos em abas.
@@ -178,6 +196,9 @@ func (m Model) viewDetail() string {
 	head := styleColTitleFocus.Render(card.Title)
 
 	metaParts := []string{card.ID, "atualizado " + relativeTime(card.Updated)}
+	if a, ok := m.agentFor(card); ok {
+		metaParts = append(metaParts, "agente "+a.Name+": "+string(a.Status))
+	}
 	if st, ok := m.ghStates[card.Path]; ok {
 		metaParts = append(metaParts, st.Detail())
 	}
@@ -244,6 +265,9 @@ func (m Model) viewHelp() string {
 		{"o", "abrir o PR do card no browser"},
 		{"n", "novo card na coluna focada"},
 		{"e", "editar o card no $EDITOR"},
+		{"", ""},
+		{"s", "subir um agente com o prompt da coluna"},
+		{"f", "pular para o pane do agente"},
 		{"", ""},
 		{"p", "editar a coluna (título, config e prompt)"},
 		{"a", "nova coluna"},

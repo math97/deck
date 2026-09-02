@@ -12,6 +12,7 @@ import (
 
 	"github.com/matheusalbuquerque/deck/internal/board"
 	"github.com/matheusalbuquerque/deck/internal/gh"
+	"github.com/matheusalbuquerque/deck/internal/herdr"
 )
 
 // mode determina quem consome as teclas.
@@ -58,6 +59,10 @@ type Model struct {
 
 	// Aba ativa no detalhe do card: 0 é o card, 1+ são os artefatos.
 	tabIdx int
+
+	// Agentes vivos no herdr, por nome, e se estamos dentro de uma sessão.
+	agents      map[string]herdr.Agent
+	herdrInside bool
 }
 
 // Mensagens internas.
@@ -77,6 +82,9 @@ func New(b *board.Board) Model {
 		input:     ti,
 		ghStates:  map[string]gh.State{},
 		ghEnabled: gh.Available(),
+
+		agents:      map[string]herdr.Agent{},
+		herdrInside: herdr.Inside(),
 	}
 	m.syncErrors()
 	return m
@@ -86,6 +94,9 @@ func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{watchCmd(m.root), tea.EnterAltScreen}
 	if m.ghEnabled {
 		cmds = append(cmds, pollGitHub(m.b.Cards), scheduleGitHubPoll())
+	}
+	if m.herdrInside {
+		cmds = append(cmds, pollAgents(), scheduleAgentPoll())
 	}
 	return tea.Batch(cmds...)
 }
@@ -107,7 +118,45 @@ func (m *Model) currentCards() []*board.Card {
 	if col == nil {
 		return nil
 	}
-	return m.b.CardsIn(col.Key)
+	return m.cardsIn(col.Key)
+}
+
+// cardsIn devolve os cards de uma coluna na ordem em que serão desenhados.
+//
+// Cards cujo agente está bloqueado ou terminou sobem para o topo: é o que
+// precisa de você. A view e o cursor usam esta mesma função, senão o card
+// selecionado deixaria de ser o card desenhado.
+func (m *Model) cardsIn(key string) []*board.Card {
+	cards := m.b.CardsIn(key)
+	if len(m.agents) == 0 {
+		return cards
+	}
+
+	var urgent, rest []*board.Card
+	for _, c := range cards {
+		if c.Agent == nil {
+			rest = append(rest, c)
+			continue
+		}
+		if a, ok := m.agents[c.Agent.Name]; ok && a.Status.NeedsAttention() {
+			urgent = append(urgent, c)
+		} else {
+			rest = append(rest, c)
+		}
+	}
+	if len(urgent) == 0 {
+		return cards
+	}
+	return append(urgent, rest...)
+}
+
+// agentFor devolve o agente vivo ligado ao card, se houver.
+func (m *Model) agentFor(card *board.Card) (herdr.Agent, bool) {
+	if card == nil || card.Agent == nil {
+		return herdr.Agent{}, false
+	}
+	a, ok := m.agents[card.Agent.Name]
+	return a, ok
 }
 
 func (m *Model) currentCard() *board.Card {

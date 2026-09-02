@@ -1,7 +1,13 @@
 package ui
 
 import (
+	"context"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/matheusalbuquerque/deck/internal/herdr"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -31,6 +37,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ghTickMsg:
 		return m, tea.Batch(pollGitHub(m.b.Cards), scheduleGitHubPoll())
+
+	case agentsMsg:
+		m.agents = msg
+		m.clampCursor()
+		return m, nil
+
+	case agentTickMsg:
+		return m, tea.Batch(pollAgents(), scheduleAgentPoll())
+
+	case agentStartedMsg:
+		return m.agentStarted(msg)
 
 	case clearStatusMsg:
 		m.status = ""
@@ -213,6 +230,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, openEditor(card.Path)
 
+	case "s":
+		return m.startAgentForCard()
+
+	case "f":
+		return m.focusAgent()
+
 	// --- colunas ---
 	case "p":
 		col := m.currentColumn()
@@ -333,4 +356,110 @@ func (m Model) shiftColumn(delta int) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// startAgentForCard dispara um agente na coluna em que o card está.
+func (m Model) startAgentForCard() (tea.Model, tea.Cmd) {
+	if !m.herdrInside {
+		m.setStatus(false, "fora de uma sessão do herdr — abra o deck dentro de um pane")
+		return m, clearStatusCmd()
+	}
+
+	card := m.currentCard()
+	if card == nil {
+		m.setStatus(false, "nenhum card selecionado")
+		return m, clearStatusCmd()
+	}
+	col := m.currentColumn()
+	if col == nil || !col.HasPrompt() {
+		m.setStatus(false, "a coluna %s não tem prompt", m.columnTitle())
+		return m, clearStatusCmd()
+	}
+	if a, ok := m.agentFor(card); ok && a.Status != herdr.StatusDone {
+		m.setStatus(false, "%s já tem agente (%s) — use f para ir até ele", card.Title, a.Status)
+		return m, clearStatusCmd()
+	}
+
+	taken := make(map[string]bool, len(m.agents))
+	for name := range m.agents {
+		taken[name] = true
+	}
+
+	m.setStatus(true, "subindo agente para %s…", card.Title)
+	return m, startAgent(m.b, card, col, taken)
+}
+
+// agentStarted registra no card o agente que subiu.
+func (m Model) agentStarted(msg agentStartedMsg) (tea.Model, tea.Cmd) {
+	var card *board.Card
+	for _, c := range m.b.Cards {
+		if c.Path == msg.cardPath {
+			card = c
+			break
+		}
+	}
+
+	if msg.err != nil {
+		m.setStatus(false, "%v", msg.err)
+		// Mesmo com erro no prompt, o agente pode ter subido: registra o que há.
+		if card != nil && msg.agent != nil {
+			m.linkAgent(card, msg.agent)
+		}
+		return m, clearStatusCmd()
+	}
+	if card == nil || msg.agent == nil {
+		return m, clearStatusCmd()
+	}
+
+	m.linkAgent(card, msg.agent)
+	m.setStatus(true, "agente %s rodando em %s", msg.agent.Name, msg.agent.PaneID)
+	return m, tea.Batch(pollAgents(), clearStatusCmd())
+}
+
+// linkAgent grava a ligação card ↔ agente no frontmatter e no log.
+func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent) {
+	card.Agent = &board.AgentRef{
+		Name: agent.Name,
+		Pane: agent.PaneID,
+		Kind: agent.Kind,
+	}
+	card.AppendLog("agente `%s` iniciado em %s", agent.Name, agent.PaneID)
+	if err := card.Save(); err != nil {
+		m.setStatus(false, "salvando card: %v", err)
+		return
+	}
+	m.agents[agent.Name] = *agent
+}
+
+// focusAgent leva o usuário ao pane do agente do card.
+func (m Model) focusAgent() (tea.Model, tea.Cmd) {
+	card := m.currentCard()
+	if card == nil || card.Agent == nil {
+		m.setStatus(false, "este card não tem agente")
+		return m, clearStatusCmd()
+	}
+	if !m.herdrInside {
+		m.setStatus(false, "fora de uma sessão do herdr")
+		return m, clearStatusCmd()
+	}
+	if _, ok := m.agentFor(card); !ok {
+		m.setStatus(false, "o agente %s não está mais vivo", card.Agent.Name)
+		return m, clearStatusCmd()
+	}
+
+	name := card.Agent.Name
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = herdr.AgentFocus(ctx, name)
+		return nil
+	}
+}
+
+// columnTitle é um atalho seguro para o título da coluna focada.
+func (m *Model) columnTitle() string {
+	if col := m.currentColumn(); col != nil {
+		return col.Title
+	}
+	return "?"
 }
