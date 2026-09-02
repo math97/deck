@@ -288,3 +288,14 @@ func Notify(ctx context.Context, title, body, sound string) {
 	}
 	_ = run(ctx, nil, args...)
 }
+
+// PaneClose fecha um pane e mata o processo dentro dele.
+//
+// Só deve ser chamado para panes que o próprio deck criou, e com confirmação
+// do usuário: o skill do herdr é explícito que não se fecha o que não se criou.
+func PaneClose(ctx context.Context, paneID string) error {
+	if paneID == "" {
+		return fmt.Errorf("pane vazio")
+	}
+	return run(ctx, nil, "pane", "close", paneID)
+}

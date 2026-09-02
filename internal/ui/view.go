@@ -201,19 +201,38 @@ func (m Model) viewFooter() string {
 			inputNewCard:      "novo card",
 			inputNewColumn:    "nova coluna",
 			inputRenameColumn: "renomear coluna",
+			inputGitHubPR:     "link do PR",
+			inputFilter:       "buscar",
 		}[m.inputKind]
 		return stylePrompt.Render(label+":") + " " + m.input.View()
 	}
 
+	// O filtro ativo é um prefixo permanente, não uma mensagem: ele convive
+	// com o status em vez de competir, senão você esquece que está filtrando e
+	// acha que os cards sumiram.
+	prefix := ""
+	if m.filter != "" {
+		n := 0
+		for _, col := range m.columns() {
+			n += len(m.cardsIn(col.Key))
+		}
+		prefix = stylePrompt.Render(fmt.Sprintf(" filtro %q", m.filter)) +
+			styleCardMeta.Render(fmt.Sprintf(" %d card(s) ", n))
+	}
+
 	if m.errMsg != "" {
-		return styleErrBar.Render("⚠ " + m.errMsg)
+		return prefix + styleErrBar.Render("⚠ "+m.errMsg)
 	}
 	if m.status != "" {
 		if m.statusOK {
-			return styleOKBar.Render("✓ " + m.status)
+			return prefix + styleOKBar.Render("✓ "+m.status)
 		}
-		return styleErrBar.Render("✗ " + m.status)
+		return prefix + styleErrBar.Render("✗ "+m.status)
 	}
+	if prefix != "" {
+		return prefix + styleStatus.Render("esc limpa o filtro")
+	}
+
 	hints := "h/l colunas · j/k cards · H/L mover · n novo · e editar"
 	if m.herdrInside {
 		hints += " · s agente · f pane"
@@ -327,11 +346,15 @@ func (m Model) viewHelp() string {
 		{"tab", "próxima aba, dentro do card aberto"},
 		{"o", "abrir o PR do card no browser"},
 		{"n", "novo card na coluna focada"},
+		{"d", "arquivar o card (pede confirmação)"},
+		{"u", "colar o link do PR no card"},
+		{"/", "buscar; esc limpa o filtro"},
 		{"e", "editar o card no $EDITOR"},
 		{"", ""},
 		{"s", "subir um agente com o prompt da coluna"},
 		{"f", "pular para o pane do agente"},
 		{"R", "publicar o review no PR (pede confirmação)"},
+		{"c", "fechar o pane do agente (pede confirmação)"},
 		{"", ""},
 		{"p", "editar a coluna (título, config e prompt)"},
 		{"a", "nova coluna"},

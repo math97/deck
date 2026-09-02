@@ -960,3 +960,138 @@ func TestDetailScrolls(t *testing.T) {
 		t.Errorf("offset não pode ficar negativo: %d", m.detailOffset)
 	}
 }
+
+func TestFilterNarrowsCards(t *testing.T) {
+	m := newTestModel(t)
+	for _, title := range []string{"Corrigir login", "Migrar auth", "Ajustar rodapé"} {
+		m = press(t, m, "n")
+		m = typeText(t, m, title)
+		m = press(t, m, "enter")
+	}
+
+	m = press(t, m, "/")
+	m = typeText(t, m, "auth")
+	m = press(t, m, "enter")
+
+	got := m.cardsIn("todo")
+	if len(got) != 1 || got[0].Title != "Migrar auth" {
+		t.Errorf("filtro deveria deixar só 'Migrar auth', veio %d cards", len(got))
+	}
+	if !strings.Contains(m.View(), "filtro") {
+		t.Errorf("o filtro ativo deveria aparecer no rodapé:\n%s", m.View())
+	}
+
+	m = press(t, m, "esc")
+	if m.filter != "" {
+		t.Error("esc deveria limpar o filtro")
+	}
+	if len(m.cardsIn("todo")) != 3 {
+		t.Error("limpar o filtro deveria trazer todos de volta")
+	}
+}
+
+func TestFilterSearchesBody(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "Tarefa opaca")
+	m = press(t, m, "enter")
+
+	card := m.currentCard()
+	card.Body = "## Contexto\n\nO token de refresh expira cedo demais.\n"
+	card.Save()
+	m.reload()
+
+	m.filter = "refresh"
+	if len(m.cardsIn("todo")) != 1 {
+		t.Error("a busca deveria encontrar pelo corpo, não só pelo título")
+	}
+}
+
+func TestFilterKeepsCursorConsistent(t *testing.T) {
+	m := newTestModel(t)
+	for _, title := range []string{"aaa", "bbb", "ccc"} {
+		m = press(t, m, "n")
+		m = typeText(t, m, title)
+		m = press(t, m, "enter")
+	}
+	m.cardIdx = 2
+
+	m.filter = "bbb"
+	m.clampCursor()
+	if c := m.currentCard(); c == nil || c.Title != "bbb" {
+		t.Errorf("cursor deveria cair no único card visível, veio %v", c)
+	}
+}
+
+func TestSetGitHubPRThroughUI(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "com PR")
+	m = press(t, m, "enter")
+
+	m = press(t, m, "u")
+	if m.mode != modeInput {
+		t.Fatal("'u' deveria abrir a entrada do link")
+	}
+	m = typeText(t, m, "https://github.com/org/repo/pull/42")
+	m = press(t, m, "enter")
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("todo")[0]
+	if got.GitHubPR != "https://github.com/org/repo/pull/42" {
+		t.Errorf("link não persistiu: %q", got.GitHubPR)
+	}
+	if !strings.Contains(m.status, "org/repo#42") {
+		t.Errorf("status deveria confirmar o PR, veio %q", m.status)
+	}
+}
+
+func TestReleaseAgentAsksAndWarnsWhenWorking(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "ocupado", "card-ocupado")
+	m.herdrInside = true
+	m.agents["card-ocupado"] = herdr.Agent{Name: "card-ocupado", Status: herdr.StatusWorking}
+
+	m = press(t, m, "c")
+	if m.mode != modeConfirm {
+		t.Fatal("fechar o pane deveria pedir confirmação")
+	}
+	if !strings.Contains(m.View(), "AINDA ESTÁ TRABALHANDO") {
+		t.Errorf("deveria avisar que o agente está trabalhando:\n%s", m.View())
+	}
+	_ = card
+}
+
+func TestAgentReleasedClearsCard(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "libera", "card-libera")
+	m.agents["card-libera"] = herdr.Agent{Name: "card-libera"}
+
+	next, _ := m.agentReleased(agentReleasedMsg{cardPath: card.Path, name: "card-libera"})
+	m = next.(Model)
+
+	b2, _ := board.Load(m.root)
+	got := b2.CardsIn("refine")[0]
+	if got.Agent != nil {
+		t.Error("a referência ao agente deveria ter sido removida do card")
+	}
+	if !strings.Contains(got.Body, "liberado") {
+		t.Errorf("o log deveria registrar a liberação:\n%s", got.Body)
+	}
+	if _, ok := m.agents["card-libera"]; ok {
+		t.Error("agente deveria ter saído do mapa em memória")
+	}
+}
+
+func TestReleaseAgentWithoutAgentWarns(t *testing.T) {
+	m := newTestModel(t)
+	m = press(t, m, "n")
+	m = typeText(t, m, "sem agente")
+	m = press(t, m, "enter")
+	m.herdrInside = true
+
+	m = press(t, m, "c")
+	if m.statusOK || !strings.Contains(m.status, "não tem agente") {
+		t.Errorf("deveria avisar que não há agente, status=%q", m.status)
+	}
+}
