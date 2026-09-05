@@ -16,6 +16,7 @@ go test ./...                              # todos os testes
 go test ./internal/board/ -run TestNome -v # um teste
 go vet ./... && gofmt -l .                 # ambos precisam sair limpos
 go run ./tools/ratchet conferir            # a catraca do quality gate
+actionlint                                 # ao mexer em .github/workflows/
 ```
 
 Não há Makefile. `go vet` e `gofmt -l .` são bloqueantes e já saem limpos.
