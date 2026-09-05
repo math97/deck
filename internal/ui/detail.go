@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/math97/deck/internal/board"
 )
 
 // tabs devolve as abas do detalhe: o card em si, mais um artefato por coluna

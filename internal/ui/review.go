@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/gh"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/gh"
 )
 
 // reviewPostedMsg é o resultado de publicar um review no PR.

@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/herdr"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/herdr"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

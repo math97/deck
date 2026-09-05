@@ -1,4 +1,4 @@
-module github.com/matheusalbuquerque/deck
+module github.com/math97/deck
 
 go 1.27.0
 

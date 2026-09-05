@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/herdr"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/herdr"
 )
 
 // baseline é o estado do artefato no instante em que o agente subiu. É o que

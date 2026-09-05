@@ -36,7 +36,7 @@ func TestLivePostReview(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 	body := "## Review do deck\n\nComentário de teste do caminho de escrita do " +
-		"[deck](https://github.com/matheusalbuquerque/deck): este texto saiu de um " +
+		"[deck](https://github.com/math97/deck): este texto saiu de um " +
 		"artefato markdown do board, publicado com `gh pr comment --body-file`.\n\n" +
 		"- [x] artefato lido do disco\n- [x] confirmação passada\n"
 	if _, err := card.WriteArtifact("code-review", body); err != nil {

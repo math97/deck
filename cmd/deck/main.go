@@ -8,9 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/skill"
-	"github.com/matheusalbuquerque/deck/internal/ui"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/skill"
+	"github.com/math97/deck/internal/ui"
 )
 
 const usage = `deck — board kanban no terminal, definido em markdown

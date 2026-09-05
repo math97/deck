@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/gh"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/gh"
 )
 
 // ghStatesMsg traz o estado dos PRs, indexado pelo caminho do card.
