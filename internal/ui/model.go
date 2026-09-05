@@ -336,6 +336,12 @@ func (m *Model) reload() {
 
 // --- comandos ---
 
+// watchDebounce é a janela de agrupamento do observador: um save de editor
+// gera vários eventos de filesystem seguidos, e todos eles devem virar um
+// aviso só. O teste de rajada deriva o limite dele daqui, em vez de repetir o
+// número — assim mudar a janela não deixa o teste medindo outra coisa.
+const watchDebounce = 120 * time.Millisecond
+
 // startWatcher liga um observador de filesystem que vive enquanto o board
 // viver, e devolve o canal por onde os avisos chegam.
 //
@@ -377,9 +383,9 @@ func startWatcher(root string) chan struct{} {
 				}
 				// Um save do editor gera vários eventos; espera a poeira baixar.
 				if timer == nil {
-					timer = time.NewTimer(120 * time.Millisecond)
+					timer = time.NewTimer(watchDebounce)
 				} else {
-					timer.Reset(120 * time.Millisecond)
+					timer.Reset(watchDebounce)
 				}
 				fire = timer.C
 
