@@ -418,4 +418,4 @@ Mudança que descarta uma alternativa real vira um
 
 ## Licença
 
-A definir antes da publicação.
+[MIT](LICENSE). © 2026 Matheus Alves Albuquerque.
