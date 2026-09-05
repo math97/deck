@@ -11,8 +11,7 @@ agentes via [herdr](https://herdr.dev).
 
 | arquivo | o que traz |
 |---|---|
-| [`HANDOFF.md`](HANDOFF.md) | o que falta, priorizado, e o que nunca foi validado |
-| [`CLAUDE.md`](CLAUDE.md) | arquitetura, comandos, princípios do projeto |
+| [`CLAUDE.md`](CLAUDE.md) | arquitetura, comandos, princípios do projeto, estado |
 | [`manual/go-patterns.md`](manual/go-patterns.md) | padrões de Go com exemplos daqui |
 | [`manual/`](manual/README.md) | invariantes, modelo de ameaça, o que os sistemas reais ensinaram |
 | [`README.md`](README.md) | o que o app faz, do ponto de vista de quem usa |
@@ -32,6 +31,12 @@ comentário na linha que ele explica, ou corpo de commit.
 **Nunca faça código, teste ou documento versionado depender de `docs/`.** Num
 clone limpo aquele diretório não existe. Um comentário que manda ler um arquivo
 que não veio é pior que comentário nenhum.
+
+O roadmap do projeto (`docs/HANDOFF.md`) é local pelo mesmo motivo: prioridade é
+decisão do dono, não do repositório. Se você o tem à mão, ele diz o que falta e
+o que nunca foi validado. Se não tem, o `CLAUDE.md` traz o estado, e trabalhar
+sem o roadmap não deve travar nada — quando faltar prioridade, pergunte em vez
+de escolher por conta própria.
 
 ## Antes de entregar
 
