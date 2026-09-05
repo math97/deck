@@ -31,9 +31,9 @@ jobs:
     steps:
       # Checkout completo, não sparse: TestIndiceDeRegras sobe até o go.mod e lê
       # manual/regras.md, e varre todos os _test.go do repositório.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
