@@ -2,7 +2,9 @@ package herdr
 
 import (
 	"errors"
+	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -127,5 +129,27 @@ func TestCodeSoValeParaErroDoHerdr(t *testing.T) {
 	// A mensagem ao usuário continua legível, com o subcomando na frente.
 	if got := err.Error(); got != "herdr agent: blocked during startup" {
 		t.Errorf("mensagem = %q", got)
+	}
+}
+
+// TestRegraNuncaPassaForce garante R14 do manual/regras.md.
+//
+// A regra é "o deck nunca força": se o herdr ou o git recusam por causa de
+// trabalho não commitado, recusar é o comportamento certo — descartar checkout
+// sujo é decisão do usuário, fora do deck.
+//
+// Testar isso pela chamada exigiria um herdr de mentira só para inspecionar
+// argumentos. A garantia que interessa é mais forte e mais barata: `--force`
+// não aparece em lugar nenhum do pacote que fala com o herdr.
+func TestRegraNuncaPassaForce(t *testing.T) {
+	raw, err := os.ReadFile("herdr.go")
+	if err != nil {
+		t.Fatalf("lendo herdr.go: %v", err)
+	}
+	for i, linha := range strings.Split(string(raw), "\n") {
+		if !strings.Contains(linha, `"--force"`) {
+			continue
+		}
+		t.Errorf("herdr.go:%d passa --force: %s", i+1, strings.TrimSpace(linha))
 	}
 }

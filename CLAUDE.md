@@ -56,7 +56,6 @@ falam com processos externos e não conhecem `board`.
 | [`manual/regras.md`](manual/regras.md) | 16 invariantes, cada uma com teste | sim |
 | [`manual/go-patterns.md`](manual/go-patterns.md) | padrões de Go com exemplos daqui | sim |
 | [`manual/security.md`](manual/security.md) | modelo de ameaça e mitigações | sim |
-| [`manual/caminho-vivo.md`](manual/caminho-vivo.md) | o que o herdr e o `gh` reais ensinaram | sim |
 | [`AGENTS.md`](AGENTS.md) | como trabalhar neste repo | sim |
 | `docs/` | roadmap e rascunho do dono do projeto | **não** |
 
@@ -115,7 +114,9 @@ Todo comportamento novo entra com teste. Os de UI dirigem o `Model` por
 
 Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
 exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
-comment` passou sem nenhuma. Ver [`manual/caminho-vivo.md`](manual/caminho-vivo.md).
+comment` passou sem nenhuma. O que se aprendeu virou
+[ADR-0002](manual/adr/0002-cli-em-vez-de-api.md) e
+[ADR-0004](manual/adr/0004-agente-nao-pronto-esta-vivo.md).
 
 **O que ainda nunca rodou de verdade é o ciclo do agente fechando dentro de um
 pane** — o agente terminar, o deck capturar o artefato e registrar no `## Log`.

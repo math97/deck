@@ -51,7 +51,10 @@ Por isso `herdr.Code(err)` existe e `run()` não engole mais o código.
 
 ## Onde vive
 
-`internal/herdr/herdr.go:AgentStart` e a tabela de códigos em
-[`../caminho-vivo.md`](../caminho-vivo.md).
+`internal/herdr/herdr.go:AgentStart`. Os códigos que mudam decisão são
+constantes comentadas no mesmo arquivo (`CodeAgentNotReady`, `CodeAgentBlocked`,
+`CodePaneBusy`, `CodeDirtyWorktree`) — ali, e não num documento, porque é onde
+não dá para divergir do que o código faz.
+
 `TestAgenteBloqueadoNoStartFicaLigadoAoCard`, `TestTarefaPendenteSoSaiQuandoOAgenteLibera`,
 `TestTarefaPendenteMorreComOAgente`.

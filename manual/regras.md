@@ -1,8 +1,21 @@
 # Regras do board
 
-As invariantes do deck num lugar só. Cada regra aqui tem um teste nomeado por
-ela em [`internal/board/regras_test.go`](../internal/board/regras_test.go) —
-**uma regra sem teste é uma regra que ninguém decidiu de propósito.**
+As invariantes do deck num lugar só. **Toda regra aqui cita um teste que a
+garante** — uma regra sem teste é uma regra que ninguém decidiu de propósito.
+
+Os testes moram no pacote de quem garante a regra: as do modelo em
+[`internal/board/regras_test.go`](../internal/board/regras_test.go), as de
+teclado e agente em `internal/ui/`, as do herdr em `internal/herdr/`.
+
+Esta tabela é verificada:
+
+```sh
+go test ./internal/board/ -run TestIndiceDeRegras
+```
+
+Esse teste falha se uma regra citar teste que não existe, se alguma ficar sem
+teste, ou se a numeração ganhar buraco. Ele não confere as regras — confere que
+o índice continua ligado ao código.
 
 O documento também registra o que foi decidido *não* ser regra, e por quê. Essa
 metade é a que mais evita retrabalho: sem ela, alguém reintroduz a restrição
@@ -55,9 +68,9 @@ recarregar entre as teclas. Escrever a regra e testá-la foi o que revelou.
 | # | regra | teste |
 |---|---|---|
 | R11 | Dois cards nunca dividem branch: o branch sai do id do card, único por construção. | `TestRegraCadaCardTemBranchProprio` |
-| R12 | Um card tem no máximo um agente vivo. Com agente não-`done`, `s` recusa e manda usar `f`. | `ui.startAgentForCard` |
+| R12 | Um card tem no máximo um agente vivo. Com agente não-`done`, `s` recusa e manda usar `f`. | `TestStartAgentRefusedWhenAlreadyRunning` |
 | R13 | Um agente que sobe parado numa pergunta é do card mesmo assim; a tarefa espera ele liberar. | `TestAgenteBloqueadoNoStartFicaLigadoAoCard` |
-| R14 | `c` fecha o pane e remove a worktree **sem `--force`**: com trabalho não commitado o herdr recusa, e recusar é o certo. | verificado contra herdr vivo |
+| R14 | `c` fecha o pane e remove a worktree **sem `--force`**: com trabalho não commitado o herdr recusa, e recusar é o certo. | `TestRegraNuncaPassaForce` |
 
 ## O que limita a publicação
 
@@ -97,6 +110,16 @@ seria número inventado.
 
 ## Quando mexer aqui
 
-Regra nova entra com número, linha na tabela e teste nomeado por ela. Regra que
+Regra nova entra com número, linha na tabela e teste que a garante. Regra que
 sai, sai daqui junto com o teste — e o motivo fica registrado no commit, porque
 "por que isso não é mais proibido" é a pergunta que aparece depois.
+
+Se `TestIndiceDeRegras` falhar, **não conserte apagando a linha**: ou o teste foi
+renomeado e a tabela precisa do nome novo, ou a regra ficou sem garantia — e aí
+ela não era regra, era intenção.
+
+R14 é o caso que mostra o que "teste" quer dizer aqui. Verificar a recusa de
+worktree suja pela chamada exigiria um herdr de mentira só para inspecionar
+argumentos; a garantia que interessa é mais forte e mais barata — `--force` não
+aparece em lugar nenhum do pacote. Prefira a asserção que fecha a porta à que
+encena o cenário.
