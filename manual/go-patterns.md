@@ -263,3 +263,8 @@ deixa um card truncado.
   workspace ganha ID novo. Leia sempre da resposta.
 - **`--force` nunca.** `worktree remove` sem `--force`: com trabalho não
   commitado o herdr recusa, e recusar é o comportamento certo.
+- **Teste que varre o home encontra a máquina, não o cenário.** Ele passa ou
+  falha conforme o que quem roda tem instalado, o que é o oposto de um teste.
+  Foi por isso que `skill.ListIn` existe separado de `skill.List`: a função que
+  recebe o diretório é a testável, e a que descobre o diretório fica sem teste
+  por ser a parte que depende da máquina.

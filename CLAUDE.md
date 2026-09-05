@@ -170,7 +170,9 @@ Identificadores em inglês.
 
 ## Estado atual
 
-Backlog priorizado e riscos conhecidos: [`HANDOFF.md`](HANDOFF.md).
+O backlog priorizado mora em `docs/HANDOFF.md`, que é **local**: é o roadmap do
+dono do projeto, não do repositório. Se você não o tem, o que está abaixo é o
+que precisa saber — e nada aqui depende dele.
 
 Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
 exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
