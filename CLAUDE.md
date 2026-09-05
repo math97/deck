@@ -152,7 +152,13 @@ Identificadores em inglês.
 
 Backlog priorizado e riscos conhecidos: [`HANDOFF.md`](HANDOFF.md).
 
-Funcional e coberto por teste. O caminho de agentes foi exercitado contra um
-herdr vivo e rendeu três correções — ver [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
-**O que ainda nunca rodou de verdade é a escrita no PR (`R`, `gh pr comment`) e
-o TUI dentro de um pane do herdr.** Espere ajustes ao exercitar isso.
+Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
+exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
+comment` passou sem nenhuma. Ver [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
+
+**O que ainda nunca rodou de verdade é o TUI dentro de um pane do herdr.**
+Espere ajustes ao exercitar isso.
+
+O `R` tem harness vivo: `TestLivePostReview` publica num PR de verdade e por
+isso fica atrás de `DECK_LIVE_PR`. Todo teste que escreve num sistema externo
+segue essa regra — a suíte normal nunca publica nada.

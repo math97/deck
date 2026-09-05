@@ -103,3 +103,45 @@ Estão em `internal/herdr` como constantes, e `herdr.Code(err)` os extrai:
 **A lição geral:** o código do erro carrega informação que a mensagem não
 carrega. Descartá-lo, como o `run()` fazia, transforma "deu certo de um jeito
 diferente" em "falhou".
+
+---
+
+## O `R`: `gh pr comment` contra um PR real
+
+Exercitado em 2026-09-05 contra o PR #27 de `math97/personalFinance`, aberto e
+de propriedade do usuário. Foi o último caminho de **escrita** do deck que
+nunca tinha tocado um sistema real.
+
+Método diferente do resto deste documento: aqui deu para dirigir o `Model`, e
+não só o pacote. `TestLivePostReview` (`internal/ui/live_pr_test.go`) monta o
+board, escreve um artefato de review de verdade, aperta `R`, confirma com `s`,
+executa o `tea.Cmd` devolvido — que é quem chama o `gh` — e alimenta a
+`reviewPostedMsg` de volta ao modelo. O mesmo caminho do teclado, sem TUI.
+
+O teste fica atrás de `DECK_LIVE_PR` porque publica comentário público e sem
+desfazer. Sem a variável, ele pula.
+
+**Passou de primeira, e nada precisou ser corrigido.** Vale registrar por que
+este caminho se comportou diferente dos anteriores: ele tem uma superfície só
+(`gh pr comment --body-file`, uma chamada, sem estado a acompanhar depois),
+enquanto os bugs do herdr moravam todos em *sequências* — subir, perguntar,
+destravar, entregar. Caminho de um passo erra menos.
+
+Verificado na origem, relendo o comentário pela API em vez de confiar na saída
+do `gh`:
+
+- o corpo chegou **byte a byte igual** ao artefato, com LF puro — o
+  `normalizeBody` do caminho de importação não tem contraparte aqui, e não
+  precisa: `--body-file` manda o arquivo como está;
+- markdown preservado, inclusive os `- [x]` e o link;
+- autoria do usuário, não de um app — é o efeito de chamar o `gh` em vez da
+  API, e é o comportamento desejado;
+- o `gh` imprime a URL do comentário criado, com o fragmento
+  `#issuecomment-<id>`. O `postReview` a usa; a suposição de que ela poderia
+  vir vazia (e o fallback para a URL do PR) nunca precisou disparar.
+
+O log do card registrou a URL do comentário, não a do PR — que é o que permite
+voltar ao que foi publicado, e não só a onde.
+
+**O que continua sem exercício:** o TUI dentro de um pane do herdr. É a única
+peça do caminho vivo que sobra.
