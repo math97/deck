@@ -67,6 +67,15 @@ go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 go install github.com/securego/gosec/v2/cmd/gosec@v2.22.9
 ```
 
+**Mexeu em `.github/workflows/`? Rode `actionlint`.** Erro de workflow não
+aparece como teste vermelho: aparece como run que falha em 0 s, sem job e sem
+log útil. Foi assim que `permissions: ${{ ... }}` passou pelo review — a chave
+não aceita expressão, e só o actionlint disse isso.
+
+```sh
+go install github.com/rhysd/actionlint/cmd/actionlint@latest
+```
+
 **Não suba o baseline para calar um achado.** Se ele for legítimo, diga por quê
 no corpo do commit — o diff do baseline é revisável, e é para isso que ele é um
 arquivo e não um número escondido.
