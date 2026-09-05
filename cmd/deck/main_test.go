@@ -209,3 +209,18 @@ func TestNewErrors(t *testing.T) {
 		t.Error("--column sem valor deveria falhar")
 	}
 }
+
+func TestVersionCommand(t *testing.T) {
+	// A versão é injetada na build com -ldflags. O padrão "dev" é o que quem
+	// compila localmente vê, e é deliberado: melhor dizer "dev" do que inventar
+	// um número que não corresponde a release nenhum.
+	for _, arg := range []string{"version", "-v", "--version"} {
+		var out bytes.Buffer
+		if err := run([]string{arg}, t.TempDir(), &out); err != nil {
+			t.Fatalf("deck %s: %v", arg, err)
+		}
+		if got := strings.TrimSpace(out.String()); got != version {
+			t.Errorf("deck %s = %q, queria %q", arg, got, version)
+		}
+	}
+}

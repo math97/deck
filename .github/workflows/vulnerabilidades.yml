@@ -1,0 +1,71 @@
+# govulncheck, fora do caminho do PR.
+#
+# Ele falha quando o MUNDO muda, não quando o código muda: um CVE publicado hoje
+# deixaria vermelho o PR de alguém que não encostou em dependência nenhuma. Pôr
+# isso no gate de PR ensinaria o time a ignorar vermelho, que é o oposto do que
+# um gate serve.
+#
+# Então roda sozinho, contra a main, e abre issue. CVE novo exige decisão humana
+# — atualizar ou mitigar —, nunca um baseline maior em silêncio.
+#
+# O govulncheck reporta só o que o código realmente ALCANÇA, não tudo que está
+# na árvore de dependências. Foi assim que ele achou duas vulnerabilidades reais
+# na primeira medição, antes deste CI existir.
+name: vulnerabilidades
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        id: scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          set +e
+          "$(go env GOPATH)/bin/govulncheck" ./... > saida.txt 2>&1
+          echo "codigo=$?" >> "$GITHUB_OUTPUT"
+          cat saida.txt
+
+      - name: abrir issue
+        if: steps.scan.outputs.codigo != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          titulo="govulncheck: vulnerabilidade alcançável pelo código"
+          # Não abre uma issue por dia para o mesmo problema.
+          if gh issue list --state open --search "$titulo in:title" --json number --jq 'length' | grep -qv '^0$'; then
+            echo "já existe issue aberta"
+            exit 0
+          fi
+          {
+            echo "O \`govulncheck\` encontrou vulnerabilidade que **o código alcança**."
+            echo
+            echo "Isto não é item de baseline: exige decidir entre atualizar a"
+            echo "dependência ou mitigar. Enquanto estiver aberta, o CI de PR segue"
+            echo "verde de propósito — quem abriu o PR não causou isso."
+            echo
+            echo '```'
+            cat saida.txt
+            echo '```'
+          } > corpo.md
+          gh issue create --title "$titulo" --body-file corpo.md

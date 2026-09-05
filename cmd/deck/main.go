@@ -13,6 +13,13 @@ import (
 	"github.com/math97/deck/internal/ui"
 )
 
+// version é preenchida na build com -ldflags "-X main.version=...".
+//
+// O valor padrão não é "desconhecido" nem vazio de propósito: quem compilou com
+// `go build` direto tem exatamente isto, e dizer "dev" é mais honesto do que
+// inventar um número que não corresponde a release nenhum.
+var version = "dev"
+
 const usage = `deck — board kanban no terminal, definido em markdown
 
 uso:
@@ -25,6 +32,7 @@ uso:
   deck prompt <card>
                   imprime o prompt da coluna atual do card, já renderizado
                   (útil para mandar a um agente: deck prompt x | claude -p)
+  deck version    a versão deste binário
   deck help       esta mensagem
 
 o board vive em .deck/
@@ -75,6 +83,9 @@ func run(args []string, cwd string, out io.Writer) error {
 		return runSkills(cwd, out)
 	case "prompt":
 		return runPrompt(args[1:], cwd, out)
+	case "version", "-v", "--version":
+		fmt.Fprintln(out, version)
+		return nil
 	case "help", "-h", "--help":
 		fmt.Fprint(out, usage)
 		return nil

@@ -1,0 +1,22 @@
+# Semanal, não diário: num projeto deste tamanho o diário só gera ruído que se
+# aprende a ignorar.
+#
+# `github-actions` está aqui junto com `gomod` de propósito: action desatualizada
+# é superfície de supply-chain como qualquer dependência, e num repositório
+# público ela roda com o token do repositório.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deck:"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deck:"

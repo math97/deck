@@ -1,0 +1,66 @@
+# Build a cada push na main: compila para as quatro plataformas e guarda o
+# binário como artifact.
+#
+# Não publica nada. Release e fórmula do brew entram depois, em workflow
+# separado e disparado à mão — build e deploy são coisas diferentes, e só a
+# primeira deve acontecer sozinha.
+#
+# Tudo roda em ubuntu-latest: o deck não usa CGO nem build tag, então
+# CGO_ENABLED=0 cross-compila para macOS sem precisar de runner macOS.
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: compilar
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          nome="deck-${GOOS}-${GOARCH}"
+          # -s -w tiram tabela de símbolos e DWARF: binário menor, e nada disso
+          # serve para quem só vai rodar o programa.
+          # Enquanto não houver tag, a versão é o SHA curto — honesto sobre o
+          # que aquele binário é.
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${GITHUB_SHA::7}" \
+            -o "$nome" ./cmd/deck
+          ls -lh "$nome"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deck-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: deck-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 14

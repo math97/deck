@@ -1,0 +1,33 @@
+# CI: só orquestra. Cada gate mora no seu arquivo e é chamado daqui.
+#
+# A separação existe para que o gate de qualidade possa ser chamado com
+# parâmetros diferentes em PR e na main — em PR ele só confere, na main ele
+# pode baixar o teto — sem duplicar o YAML.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Push seguido em PR cancela o run anterior; na main não se cancela nada,
+# porque o job de baseline commita e ser interrompido no meio de um push deixa
+# estado estranho.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  teste:
+    uses: ./.github/workflows/gate-teste.yml
+
+  qualidade:
+    uses: ./.github/workflows/gate-qualidade.yml
+    with:
+      # Só depois do merge. Ver a explicação no próprio gate.
+      atualizar-baseline: ${{ github.event_name == 'push' }}
+    permissions:
+      contents: write
