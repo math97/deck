@@ -25,7 +25,7 @@ on:
 jobs:
   conferir:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
 
@@ -37,13 +37,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Versões fixas de propósito: linter que muda de versão sozinho muda a
-      # contagem sozinho, e a catraca reprovaria um PR que não mexeu em nada.
-      - name: instalar as ferramentas
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/ferramentas
 
       - name: conferir a catraca
         run: go run ./tools/ratchet conferir
@@ -53,7 +47,7 @@ jobs:
     needs: conferir
     if: inputs.atualizar-baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: write
 
@@ -65,11 +59,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: instalar as ferramentas
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/ferramentas
 
       - name: baixar o teto quando melhora
         env:

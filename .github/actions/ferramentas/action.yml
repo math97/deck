@@ -1,0 +1,39 @@
+# Instala as ferramentas de análise que a catraca mede, com cache.
+#
+# Existe por dois motivos, e o segundo é o que importa mais:
+#
+# 1. `go install golangci-lint` compila uma árvore grande e levava ~3,5 min por
+#    job. Como os dois jobs do gate precisam das mesmas ferramentas, o CI
+#    gastava 7 minutos por run só compilando linter. Com cache, vira restore.
+#
+# 2. As versões ficam num lugar só. Quando estavam repetidas nos dois jobs, uma
+#    correção de versão precisou de dois `sed` — e é exatamente assim que duas
+#    cópias divergem sem ninguém perceber.
+#
+# As versões são fixas de propósito: linter que muda sozinho muda a contagem
+# sozinho, e a catraca reprovaria um PR que não mexeu em nada.
+name: ferramentas
+description: Instala golangci-lint e gosec nas versões fixadas, com cache
+
+runs:
+  using: composite
+  steps:
+    - name: cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/go/bin
+        # A chave carrega as versões: subir qualquer uma invalida o cache
+        # sozinha, sem ninguém precisar lembrar de limpar nada.
+        key: ferramentas-${{ runner.os }}-golangci-v2.13.2-gosec-v2.29.0
+
+    - name: instalar
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+        go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+    - name: pôr no PATH
+      shell: bash
+      run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
