@@ -13,11 +13,25 @@ agentes via [herdr](https://herdr.dev).
 |---|---|
 | [`HANDOFF.md`](HANDOFF.md) | o que falta, priorizado, e o que nunca foi validado |
 | [`CLAUDE.md`](CLAUDE.md) | arquitetura, comandos, princípios do projeto |
-| [`docs/go-patterns.md`](docs/go-patterns.md) | padrões de Go com exemplos daqui |
+| [`manual/go-patterns.md`](manual/go-patterns.md) | padrões de Go com exemplos daqui |
+| [`manual/`](manual/README.md) | invariantes, modelo de ameaça, o que os sistemas reais ensinaram |
 | [`README.md`](README.md) | o que o app faz, do ponto de vista de quem usa |
 
 Não duplique conteúdo entre eles. Regra permanente vai no arquivo certo e é
 referenciada dos outros.
+
+## Onde escrever documento
+
+**`manual/` é versionado; `docs/` é local do dono do projeto e está no
+`.gitignore`.**
+
+O critério: um agente que chega sem contexto erraria sem este texto? Se sim, vai
+para `manual/`. Se não, ou é rascunho (`docs/`), ou não devia ser documento —
+comentário na linha que ele explica, ou corpo de commit.
+
+**Nunca faça código, teste ou documento versionado depender de `docs/`.** Num
+clone limpo aquele diretório não existe. Um comentário que manda ler um arquivo
+que não veio é pior que comentário nenhum.
 
 ## Antes de entregar
 
@@ -96,5 +110,5 @@ Este projeto vai para open source. Ao propor mudança:
 
 - um commit por ideia, com corpo explicando a decisão
 - sem dependência nova sem justificativa no corpo do commit
-- README, `CLAUDE.md` e `docs/go-patterns.md` atualizados junto com o código que
+- README, `CLAUDE.md` e o `manual/` atualizados junto com o código que
   os contradiz

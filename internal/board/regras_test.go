@@ -8,7 +8,7 @@ import (
 )
 
 // Os testes deste arquivo são nomeados pela regra que garantem, e não pela
-// função que exercitam. Ver docs/regras.md: cada regra de lá tem um teste aqui,
+// função que exercitam. Ver manual/regras.md: cada regra de lá tem um teste aqui,
 // e uma regra sem teste é uma regra que ninguém decidiu de propósito.
 
 func boardDeTeste(t *testing.T) *Board {

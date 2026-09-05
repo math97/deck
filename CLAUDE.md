@@ -6,15 +6,29 @@ para disparar e acompanhar agentes, e com o `gh` para estado de PR.
 
 Instruções para agentes disparados pelo board: [`AGENTS.md`](AGENTS.md).
 
-**`docs/` não é versionado.** Só existe na máquina de quem trabalha no projeto,
-e num clone limpo não vem nada dele — se um link abaixo não abrir, é isso, não
-um arquivo perdido. O que o código precisa garantir mora em teste, não lá.
+## Onde os documentos moram
 
-- `docs/go-patterns.md` — padrões de Go, com exemplos deste código
-- `docs/regras.md` — invariantes numeradas, cada uma com teste
-- `docs/security.md` — modelo de ameaça e o que foi mitigado
-- `docs/caminho-vivo.md` — o que o herdr e o `gh` reais ensinaram
-- `docs/teste-no-pane.md` — roteiro do TUI dentro de um pane (em aberto)
+Dois lugares, com um critério só: **o que alguém precisa para não errar é
+versionado; rascunho é local.**
+
+**[`manual/`](manual/README.md) — versionado.** O que é preciso saber antes de
+mexer no código. Se sumisse, decisões que já custaram caro seriam refeitas.
+
+- [`manual/go-patterns.md`](manual/go-patterns.md) — padrões de Go, com exemplos deste código
+- [`manual/regras.md`](manual/regras.md) — invariantes numeradas, cada uma com teste
+- [`manual/security.md`](manual/security.md) — modelo de ameaça e o que foi mitigado
+- [`manual/caminho-vivo.md`](manual/caminho-vivo.md) — o que o herdr e o `gh` reais ensinaram
+
+**`docs/` — local, no `.gitignore`.** Espaço de trabalho do dono do projeto:
+rascunho, roteiro em aberto, anotação de investigação. Num clone limpo não vem
+nada dele, então **nada aqui pode depender de `docs/`** — nem link em documento
+versionado, nem comentário em código. Hoje mora lá o `docs/teste-no-pane.md`,
+roteiro do TUI dentro de um pane.
+
+Se você está escrevendo um documento e não sabe qual dos dois: pergunte se um
+agente que chega sem contexto erraria sem ele. Se sim, `manual/`. Se não, ou é
+`docs/`, ou não devia ser documento — vira comentário na linha que explica, ou
+corpo de commit.
 
 ## Comandos
 
@@ -160,7 +174,7 @@ Backlog priorizado e riscos conhecidos: [`HANDOFF.md`](HANDOFF.md).
 
 Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
 exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
-comment` passou sem nenhuma. Ver [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
+comment` passou sem nenhuma. Ver [`manual/caminho-vivo.md`](manual/caminho-vivo.md).
 
 **O que ainda nunca rodou de verdade é o TUI dentro de um pane do herdr.**
 Espere ajustes ao exercitar isso.
