@@ -37,7 +37,9 @@ func (c *Card) EnsureDir() error {
 
 	target := filepath.Join(dir, CardFileName)
 	if err := os.Rename(c.Path, target); err != nil {
-		os.Remove(dir) // desfaz a pasta vazia se o move falhar
+		// Descartado de propósito: se o move falhou, a pasta vazia é lixo, e
+		// não conseguir removê-la não muda o erro que se vai devolver.
+		_ = os.Remove(dir)
 		return err
 	}
 
