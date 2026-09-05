@@ -59,7 +59,7 @@ jobs:
             -o "$nome" ./cmd/deck
           ls -lh "$nome"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deck-${{ matrix.goos }}-${{ matrix.goarch }}
           path: deck-${{ matrix.goos }}-${{ matrix.goarch }}
