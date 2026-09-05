@@ -5,6 +5,14 @@
 # pode baixar o teto — sem duplicar o YAML.
 name: ci
 
+# `pull_request`, NUNCA `pull_request_target`.
+#
+# A troca costuma ser proposta com o argumento de "fazer o CI de fork funcionar
+# melhor", e é o jeito mais curto de furar a catraca: `pull_request_target` roda
+# com o token do repositório base E com o código do fork. Hoje um fork não
+# consegue afrouxar o baseline por duas razões independentes — o token de fork é
+# read-only, e o job `atualizar` nem existe em PR. A troca derruba a primeira e
+# deixa tudo pendurado na segunda. Ver ADR-0005.
 on:
   pull_request:
   push:
