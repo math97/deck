@@ -76,15 +76,13 @@ func relativo(raiz, caminho string) string {
 // Saída não vazia com código 1 é o normal: quer dizer que houve achado. Só é
 // erro de verdade quando não sai JSON nenhum.
 func medirGolangciLint(raiz string) ([]achado, error) {
-	cmd := exec.Command("golangci-lint", "run", "--output.json.path=stdout", "./...")
-	cmd.Dir = raiz
-	out, _ := cmd.Output()
+	out, erro := rodar(raiz, "golangci-lint", "run", "--output.json.path=stdout", "./...")
 
 	// O golangci-lint imprime o JSON na primeira linha e um resumo legível
 	// depois; decodificar o fluxo inteiro falharia no resumo.
 	linha := primeiraLinha(out)
 	if len(linha) == 0 {
-		return nil, fmt.Errorf("golangci-lint não devolveu JSON — está instalado?")
+		return nil, fmt.Errorf("golangci-lint não devolveu JSON:%s", erro)
 	}
 
 	var payload struct {
@@ -114,11 +112,9 @@ func medirGolangciLint(raiz string) ([]achado, error) {
 // medirGosec roda o gosec e normaliza a saída. Aqui o `rule_id` sempre existe,
 // então a chave fica precisa.
 func medirGosec(raiz string) ([]achado, error) {
-	cmd := exec.Command("gosec", "-quiet", "-fmt", "json", "./...")
-	cmd.Dir = raiz
-	out, _ := cmd.Output()
+	out, erro := rodar(raiz, "gosec", "-quiet", "-fmt", "json", "./...")
 	if len(out) == 0 {
-		return nil, fmt.Errorf("gosec não devolveu JSON — está instalado?")
+		return nil, fmt.Errorf("gosec não devolveu JSON:%s", erro)
 	}
 
 	var payload struct {
@@ -140,6 +136,41 @@ func medirGosec(raiz string) ([]achado, error) {
 		})
 	}
 	return achados, nil
+}
+
+// rodar executa a ferramenta e devolve a saída junto com um diagnóstico do que
+// deu errado quando ela vem vazia.
+//
+// Saída não vazia com código 1 é o normal aqui: quer dizer que houve achado. Só
+// é falha de verdade quando não sai nada — e aí o que interessa é o stderr, não
+// um palpite. A primeira versão dizia "está instalado?" e o CI mostrou por que
+// isso não serve: a ferramenta ESTAVA sendo instalada, com uma versão que não
+// existe, e a mensagem mandou procurar no lugar errado.
+func rodar(raiz, nome string, args ...string) ([]byte, string) {
+	// #nosec G204 -- `nome` é literal em todos os dois pontos de chamada
+	// ("golangci-lint" e "gosec"); nada aqui vem de entrada do usuário, e a
+	// chamada é por argv, nunca por shell.
+	cmd := exec.Command(nome, args...)
+	cmd.Dir = raiz
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	if len(out) > 0 {
+		return out, ""
+	}
+
+	diag := ""
+	if t := strings.TrimSpace(stderr.String()); t != "" {
+		diag += "\n" + t
+	}
+	if err != nil {
+		diag += "\n" + err.Error()
+	}
+	if diag == "" {
+		diag = " saída vazia, sem erro — versão inesperada de " + nome + "?"
+	}
+	return out, diag
 }
 
 func primeiraLinha(b []byte) []byte {
