@@ -1,0 +1,60 @@
+# Gate de testes: compila, confere formato e roda a suíte.
+#
+# Este é o único gate bloqueante desde o primeiro dia. `gofmt` e `go vet` já
+# saem limpos no projeto, então não precisam de catraca — não há estado de hoje
+# para congelar, e o gofmt nem é configurável.
+name: gate-teste
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  teste:
+    # Roda nos dois SOs. O ganho é menor do que parece: o observador de
+    # filesystem (internal/ui/model.go) observa DIRETÓRIOS e IGNORA o tipo do
+    # evento, então ele é insensível de propósito à diferença entre inotify
+    # (Linux) e kqueue (macOS) — inclusive para o rename da escrita atômica.
+    #
+    # Ainda assim macOS fica, porque é a plataforma principal do deck e a suíte
+    # inteira custa segundos. Se um dia isso pesar, o que se perde ao cortar é
+    # regressão de runtime na plataforma que os usuários mais usam.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      # Checkout completo, não sparse: TestIndiceDeRegras sobe até o go.mod e lê
+      # manual/regras.md, e varre todos os _test.go do repositório.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: build
+        run: go build ./...
+
+      - name: gofmt
+        run: |
+          fora=$(gofmt -l .)
+          if [ -n "$fora" ]; then
+            echo "estes arquivos não estão formatados:"
+            echo "$fora"
+            echo "rode: gofmt -w ."
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # DECK_LIVE_PR fica deliberadamente ausente: com ela, TestLivePostReview
+      # publica um comentário num PR real a cada rodada do CI.
+      - name: testes
+        run: go test -race -count=1 ./...
