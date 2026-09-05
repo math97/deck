@@ -120,6 +120,11 @@ Todo comportamento novo entra com teste. Os de UI dirigem o `Model` por
 
 ## Estado atual
 
+Repositório **público**, com CI a cada PR: testes em ubuntu e macos, e o quality
+gate de catraca. Build cross-platform a cada `main`, guardando artifact; release
+e brew ainda não existem, de propósito — publicar é decisão, não consequência de
+merge.
+
 Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
 exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
 comment` passou sem nenhuma. O que se aprendeu virou
