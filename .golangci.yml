@@ -1,0 +1,15 @@
+# Configuração explícita de propósito: a catraca compara contagens entre
+# execuções, então a medição precisa ser determinística e estável entre versões
+# do linter. Rodar com os padrões implícitos quebra as duas coisas.
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+
+issues:
+  # Os dois padrões (50 e 3) TRUNCAM a saída, e o corte varia com a ordem de
+  # processamento: a mesma árvore medida duas vezes dava 41 e 44 achados. Para
+  # uma catraca isso é fatal — ela reprovaria PR que não piorou nada, e um dia
+  # aprovaria PR que piorou. Zero desliga o limite.
+  max-issues-per-linter: 0
+  max-same-issues: 0
