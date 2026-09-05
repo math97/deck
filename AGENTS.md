@@ -28,6 +28,16 @@ O critério: um agente que chega sem contexto erraria sem este texto? Se sim, va
 para `manual/`. Se não, ou é rascunho (`docs/`), ou não devia ser documento —
 comentário na linha que ele explica, ou corpo de commit.
 
+**Decisão arquitetural vira ADR** em [`manual/adr/`](manual/adr/README.md) —
+mas só quando você **descartou uma alternativa real** ou **tentou algo que
+falhou**. Escolha sem alternativa não é ADR, é comentário no código. Copie o
+[template](manual/adr/0000-template.md); no máximo uma tela.
+
+**Não escreva prosa que descreve comportamento.** É isso que envelhece e passa a
+mentir. Comportamento vai para teste; o documento aponta para o teste. Se você
+está prestes a explicar *o que* o código faz, pare — ou o código não está claro,
+ou falta um teste com nome melhor.
+
 **Nunca faça código, teste ou documento versionado depender de `docs/`.** Num
 clone limpo aquele diretório não existe. Um comentário que manda ler um arquivo
 que não veio é pior que comentário nenhum.
