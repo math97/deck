@@ -30,13 +30,13 @@ terminal. Por quê: [ADR-0002](manual/adr/0002-cli-em-vez-de-api.md),
 ## Instalação
 
 ```sh
-go install github.com/matheusalbuquerque/deck/cmd/deck@latest
+go install github.com/math97/deck/cmd/deck@latest
 ```
 
 Ou a partir do código:
 
 ```sh
-git clone https://github.com/matheusalbuquerque/deck
+git clone https://github.com/math97/deck
 cd deck
 go build -o ~/.local/bin/deck ./cmd/deck
 ```

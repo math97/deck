@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/herdr"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/herdr"
 )
 
 // agentPollInterval é curto porque o estado do agente muda rápido e a consulta

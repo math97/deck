@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/gh"
-	"github.com/matheusalbuquerque/deck/internal/herdr"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/gh"
+	"github.com/math97/deck/internal/herdr"
 )
 
 // newTestModel monta um board temporário e o modelo já dimensionado.

@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
-	"github.com/matheusalbuquerque/deck/internal/herdr"
+	"github.com/math97/deck/internal/board"
+	"github.com/math97/deck/internal/herdr"
 )
 
 const (

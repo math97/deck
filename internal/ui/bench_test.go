@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/math97/deck/internal/board"
 )
 
 // benchModel monta um board com n cards espalhados pelas colunas.

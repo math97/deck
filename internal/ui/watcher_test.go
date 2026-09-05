@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matheusalbuquerque/deck/internal/board"
+	"github.com/math97/deck/internal/board"
 )
 
 // waitEvent espera um aviso do observador, com prazo.
