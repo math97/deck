@@ -31,18 +31,25 @@ exercitadas contra um herdr 0.8.2 vivo (fora do TUI, dirigindo o CLI e o pacote
 | `agent prompt` / `agent get` / `agent list` | ✅ verificado |
 | `agent read` (captura) | ✅ verificado — devolve texto puro, não JSON; estava quebrado |
 | cadeia de provedores | ✅ corrigida: parava no erro, não no agente vivo |
-| `gh pr comment` | ❌ **ainda nunca rodou** — é o único caminho de escrita não exercitado |
+| `gh pr comment` | ✅ verificado contra um PR real — passou sem correção |
 
 O caminho de **leitura** do GitHub foi validado contra a API real: 32 checks de
 um PR aberto do `cli/cli`, categorias fechando com o total, e as três formas de
-erro devolvendo mensagem útil. O `gh pr comment` continua sem teste vivo.
+erro devolvendo mensagem útil.
+
+O de **escrita** também: o `R` publicou num PR real em 2026-09-05, e o
+comentário foi relido pela API — corpo byte a byte igual ao artefato, markdown
+preservado, autoria do usuário. Passou sem precisar de correção, ao contrário
+do caminho do herdr; o porquê está no `docs/caminho-vivo.md`. O harness é
+`TestLivePostReview`, atrás de `DECK_LIVE_PR`.
+
+**Todo caminho de escrita do deck já tocou um sistema real.**
 
 ### O que ainda não foi exercitado
 
-- **`gh pr comment` (`R`)** — precisa de um PR real de sua propriedade.
-- **O TUI dentro de um pane do herdr.** Tudo acima foi dirigido pelo CLI e pelo
-  pacote; `HERDR_ENV` chegando ao processo, o rodapé mostrando `s agente · f
-  pane`, e o fluxo de tecla ponta a ponta seguem por confirmar.
+- **O TUI dentro de um pane do herdr.** Tudo acima foi dirigido pelo CLI, pelo
+  pacote e pelo `Model`; `HERDR_ENV` chegando ao processo, o rodapé mostrando
+  `s agente · f pane`, e o fluxo de tecla ponta a ponta seguem por confirmar.
 - **A entrega tardia do prompt** (agente que sobe parado numa pergunta) tem
   teste de unidade, mas nunca rodou contra um agente real que ficou bloqueado e
   depois liberou.
@@ -52,32 +59,28 @@ erro devolvendo mensagem útil. O `gh pr comment` continua sem teste vivo.
 ## Prioridade
 
 Ordenado por ganho sobre complexidade. O item 1 vale mais que o resto somado,
-porque reduz risco em vez de adicionar superfície — e é o último pedaço do
-caminho de escrita que nunca tocou um sistema real.
+porque reduz risco em vez de adicionar superfície — e é a última peça do
+projeto que nunca rodou num sistema real.
 
 ### 1. Fechar o que restou do caminho vivo — ganho alto, complexidade baixa
 
-Sobrou o `R` (`gh pr comment`) e o TUI dentro de um pane. Abrir o `deck` num
-pane do herdr, confirmar que o rodapé mostra `s agente · f pane` (se não
-mostrar, `HERDR_ENV` não chegou e nada mais funciona), e exercitar `s`, `f`,
-`c` e `R` num projeto real com um PR seu.
+Sobrou **só o TUI dentro de um pane**. O `R` foi fechado — ver acima.
 
-Para o `R` há um harness pronto: `TestLivePostReview` em
-`internal/ui/live_pr_test.go`. Ele monta o board, escreve um artefato de
-review de verdade, aperta `R`, confirma com `s` e executa o `tea.Cmd` que
-publica — o mesmo caminho do teclado, sem TUI. Fica atrás de `DECK_LIVE_PR`
-porque publica comentário público e irreversível:
+Abrir o `deck` num pane do herdr e olhar o rodapé primeiro: se não mostrar
+`s agente · f pane`, o `HERDR_ENV` não chegou ao processo e nada além disso vai
+funcionar. Depois, exercitar `s`, `f` e `c` num projeto real.
+
+O que mais provavelmente ainda quebra: a entrega tardia do prompt quando o
+agente destrava, e o `agent read` num agente em tela alternativa — neste caso o
+log dizer que não conseguiu ler é o comportamento **correto**, não um bug.
+
+Para repetir o `R` quando fizer sentido (o harness é seguro, mas publica de
+verdade):
 
 ```sh
 DECK_LIVE_PR=https://github.com/voce/repo/pull/1 \
   go test ./internal/ui/ -run TestLivePostReview -v
 ```
-
-Sem a variável ele pula, então não atrapalha a suíte.
-
-O que mais provavelmente ainda quebra: a entrega tardia do prompt quando o
-agente destrava, e o `agent read` num agente em tela alternativa — neste caso o
-log dizer que não conseguiu ler é o comportamento **correto**, não um bug.
 
 **Nada abaixo desta linha deveria ser construído antes disto.** Empilhar em cima
 de um caminho não exercitado é o jeito mais rápido de acumular retrabalho — e o
