@@ -3,11 +3,11 @@
 Estado do projeto e o que vem a seguir, para quem pegar daqui.
 
 Leia [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md) e
-[`docs/go-patterns.md`](docs/go-patterns.md) antes de escrever código. Este
+[`manual/go-patterns.md`](manual/go-patterns.md) antes de escrever código. Este
 arquivo é só o mapa do que falta.
 
-`docs/` **não é versionado** — as referências a ele daqui para baixo só abrem na
-máquina de quem trabalha no projeto.
+`manual/` é versionado; `docs/` é local e está no `.gitignore` — as referências a
+`docs/` daqui para baixo só abrem na máquina do dono do projeto.
 
 ---
 
@@ -25,7 +25,7 @@ acompanhamento de agentes via herdr, cadeia de provedores, skills como prompt.
 O risco número um do projeto foi reduzido: as chamadas ao herdr foram
 exercitadas contra um herdr 0.8.2 vivo (fora do TUI, dirigindo o CLI e o pacote
 `internal/herdr` direto). O que se aprendeu está em
-[`docs/caminho-vivo.md`](docs/caminho-vivo.md).
+[`manual/caminho-vivo.md`](manual/caminho-vivo.md).
 
 | chamada | estado |
 |---|---|
@@ -43,7 +43,7 @@ erro devolvendo mensagem útil.
 O de **escrita** também: o `R` publicou num PR real em 2026-09-05, e o
 comentário foi relido pela API — corpo byte a byte igual ao artefato, markdown
 preservado, autoria do usuário. Passou sem precisar de correção, ao contrário
-do caminho do herdr; o porquê está no `docs/caminho-vivo.md`. O harness é
+do caminho do herdr; o porquê está no `manual/caminho-vivo.md`. O harness é
 `TestLivePostReview`, atrás de `DECK_LIVE_PR`.
 
 **Todo caminho de escrita do deck já tocou um sistema real.**
@@ -69,10 +69,18 @@ projeto que nunca rodou num sistema real.
 
 Sobrou **só o TUI dentro de um pane**. O `R` foi fechado — ver acima.
 
-O roteiro item a item está em `docs/teste-no-pane.md`, com o que observar em
-cada passo e o que já passou. O portão (`HERDR_ENV` chegando, `s` e `f`) já
-passou; o que falta é o ciclo **fechar** — o agente terminar e o deck capturar
-o artefato — e o `c` com worktree suja.
+Já passou: o portão (`HERDR_ENV` chega, o rodapé mostra `s agente · f pane`),
+`s` subindo o agente, `f` indo até ele, e o status acompanhando de `ocioso`
+para `trabalhando`.
+
+Falta o ciclo **fechar** — o agente terminar, o herdr reportar `done`, o deck
+capturar o artefato e registrar no `## Log` — e o `c` com worktree suja, que
+tem de recusar. Os dois riscos conhecidos: o baseline do artefato decidir
+errado que não houve entrega, e o agente reescrever o `card.md` por cima do
+`## Log` enquanto a captura escreve nele.
+
+(O roteiro item a item, com o que observar em cada passo, está em
+`docs/teste-no-pane.md` — local, então não conte com ele num clone.)
 
 O que mais provavelmente ainda quebra: a entrega tardia do prompt quando o
 agente destrava, e o `agent read` num agente em tela alternativa — neste caso o
@@ -92,7 +100,7 @@ exercício de agora rendeu cinco bugs em código que tinha teste passando.
 
 ### ✅ 2. Avaliação de segurança — feita
 
-[`docs/security.md`](docs/security.md). Uma vulnerabilidade real corrigida
+[`manual/security.md`](manual/security.md). Uma vulnerabilidade real corrigida
 (URL do frontmatter chegando ao `open` do macOS sem validação de esquema),
 conteúdo importado passou a ser delimitado e rotulado, e a confirmação do `R`
 passou a dizer que o conteúdo vai público. Travessia de caminho verificada e
@@ -100,7 +108,7 @@ coberta por teste.
 
 ### ✅ 3. Regras de negócio explícitas — feita
 
-[`docs/regras.md`](docs/regras.md), com 16 regras numeradas e um teste nomeado
+[`manual/regras.md`](manual/regras.md), com 16 regras numeradas e um teste nomeado
 por regra em `internal/board/regras_test.go`. O exercício revelou dois bugs,
 como previsto: arquivar coluna não removia da lista em memória (dava para zerar
 o board), e "review não vazio" media bytes em vez de conteúdo (um review em
