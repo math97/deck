@@ -426,16 +426,45 @@ func clearStatusCmd() tea.Cmd {
 	return tea.Tick(4*time.Second, func(time.Time) tea.Msg { return clearStatusMsg{} })
 }
 
-// openEditor suspende o TUI e abre o arquivo no $EDITOR.
-func openEditor(path string) tea.Cmd {
+// editorArgv escolhe o editor e o separa em programa e argumentos.
+//
+// Por convenção, `$EDITOR` carrega opção junto — `code -w`, `subl -w`,
+// `emacsclient -t` —, e o `git`, o `crontab` e o `less` todos aceitam isso.
+// Passar a variável inteira como nome do programa faz o `exec` procurar um
+// arquivo chamado literalmente "code -w", espaço incluído, e a tecla `e` falha
+// com "executable file not found" para quem usa editor gráfico.
+//
+// O `-w` não é enfeite: é `--wait`. Sem ele o editor devolve o controle na
+// hora, o TUI volta e o board recarrega o card antes de você ter editado.
+//
+// `strings.Fields` não entende aspas, então um editor cujo **caminho** tem
+// espaço deixa de funcionar. É o caso raro contra o comum, e a alternativa —
+// passar por shell, como o `git` faz — reabriria a injeção de comando que o
+// `manual/security.md` §4 dá como fechada por construção. Entre suportar
+// caminho com espaço e manter essa porta fechada, a porta ganha.
+func editorArgv(path string) (string, []string) {
 	editor := os.Getenv("EDITOR")
-	if editor == "" {
+	if strings.TrimSpace(editor) == "" {
 		editor = os.Getenv("VISUAL")
 	}
-	if editor == "" {
-		editor = "vi"
+
+	// Fields também resolve o `EDITOR=" "`, que a comparação com string vazia
+	// deixava passar e virava um nome de programa em branco.
+	campos := strings.Fields(editor)
+	if len(campos) == 0 {
+		campos = []string{"vi"}
 	}
-	cmd := exec.Command(editor, path)
+
+	args := make([]string, 0, len(campos))
+	args = append(args, campos[1:]...)
+	args = append(args, path)
+	return campos[0], args
+}
+
+// openEditor suspende o TUI e abre o arquivo no $EDITOR.
+func openEditor(path string) tea.Cmd {
+	nome, args := editorArgv(path)
+	cmd := exec.Command(nome, args...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return editorDoneMsg{err: err}
 	})

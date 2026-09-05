@@ -1660,3 +1660,59 @@ func TestRegraPublicarPedeConfirmacaoComPadraoNao(t *testing.T) {
 		t.Error("o padrão da confirmação é não")
 	}
 }
+
+func TestEditorArgvSeparaOpcoes(t *testing.T) {
+	// $EDITOR com opção é o caso comum, não a exceção: é o que faz um editor
+	// gráfico esperar você fechar o arquivo. Antes desta separação, a tecla `e`
+	// falhava com "executable file not found" para todos estes.
+	casos := []struct {
+		editor   string
+		programa string
+		args     []string
+	}{
+		{"vim", "vim", []string{"/c.md"}},
+		{"code -w", "code", []string{"-w", "/c.md"}},
+		{"emacsclient -t -a ''", "emacsclient", []string{"-t", "-a", "''", "/c.md"}},
+
+		// Sem editor definido, cai no vi.
+		{"", "vi", []string{"/c.md"}},
+		// Só espaço em branco também cai no vi: a comparação com string vazia
+		// deixava isso passar e virava um nome de programa em branco.
+		{"   ", "vi", []string{"/c.md"}},
+	}
+
+	for _, c := range casos {
+		t.Setenv("EDITOR", c.editor)
+		t.Setenv("VISUAL", "")
+
+		programa, args := editorArgv("/c.md")
+		if programa != c.programa {
+			t.Errorf("EDITOR=%q → programa %q, queria %q", c.editor, programa, c.programa)
+		}
+		if strings.Join(args, "\x00") != strings.Join(c.args, "\x00") {
+			t.Errorf("EDITOR=%q → args %q, queria %q", c.editor, args, c.args)
+		}
+	}
+}
+
+func TestEditorArgvCaiNoVisual(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	t.Setenv("VISUAL", "subl -w")
+
+	programa, args := editorArgv("/c.md")
+	if programa != "subl" || strings.Join(args, " ") != "-w /c.md" {
+		t.Errorf("VISUAL deveria valer quando EDITOR falta: %q %q", programa, args)
+	}
+}
+
+// O caminho do card vai SEMPRE por último, depois das opções do editor. Trocar
+// a ordem faria o editor tratar o card como valor de uma opção.
+func TestEditorArgvPoeOCaminhoPorUltimo(t *testing.T) {
+	t.Setenv("EDITOR", "nvim -u NONE")
+	t.Setenv("VISUAL", "")
+
+	_, args := editorArgv("/caminho/card.md")
+	if len(args) == 0 || args[len(args)-1] != "/caminho/card.md" {
+		t.Errorf("o caminho tem que ser o último argumento, veio %q", args)
+	}
+}

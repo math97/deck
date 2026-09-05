@@ -33,4 +33,3 @@
 1 gosec|G304|tools/ratchet/main.go
 1 gosec|G306|internal/ui/capture.go
 1 gosec|G306|tools/ratchet/main.go
-1 gosec|G702|internal/ui/model.go
