@@ -63,7 +63,21 @@ func TestWatcherDebouncesBurst(t *testing.T) {
 	events := startWatcher(root)
 	time.Sleep(50 * time.Millisecond)
 
-	// Um save de editor gera vários eventos seguidos; deve virar um aviso só.
+	// O que impede uma rajada de virar dez avisos não é o timer: é o canal.
+	// Ele tem capacidade 1 e o envio é não-bloqueante, então um aviso já
+	// pendente absorve todos os seguintes — o segundo cai no `default` e é
+	// descartado.
+	//
+	// Essa é a garantia que sustenta a interface: se alguém trocar o canal por
+	// um sem buffer, ou por um de capacidade maior, a rajada volta a inundar o
+	// board. Por isso a asserção é sobre a capacidade, e não sobre contar
+	// avisos num prazo — contagem depende da velocidade da máquina e passaria
+	// mesmo com o debounce desligado.
+	if cap(events) != 1 {
+		t.Fatalf("o canal do observador precisa ter capacidade 1 para absorver rajada, tem %d", cap(events))
+	}
+
+	// Um save de editor gera vários eventos seguidos; um aviso tem que chegar.
 	for i := 0; i < 10; i++ {
 		os.WriteFile(filepath.Join(root, "cards", "y.md"),
 			[]byte("---\ncolumn: todo\n---\n"), 0o644)
@@ -72,12 +86,16 @@ func TestWatcherDebouncesBurst(t *testing.T) {
 	if !waitEvent(t, events, 2*time.Second) {
 		t.Fatal("a rajada deveria gerar ao menos um aviso")
 	}
-	// O canal tem capacidade 1: no máximo mais um aviso pendente, nunca dez.
-	extra := 0
+
+	// E o board não pode receber um aviso por escrita. O teto é fixo e
+	// generoso de propósito: a capacidade 1 já limita o que fica pendente, e
+	// numa máquina lenta a rajada pode se espalhar por mais de uma janela
+	// legitimamente. Dez seria agrupamento nenhum.
+	avisos := 1
 	for waitEvent(t, events, 300*time.Millisecond) {
-		extra++
-		if extra > 2 {
-			t.Fatal("a rajada não foi agrupada — muitos avisos")
+		avisos++
+		if avisos > 3 {
+			t.Fatalf("a rajada não foi agrupada: %d avisos para 10 escritas", avisos)
 		}
 	}
 }
