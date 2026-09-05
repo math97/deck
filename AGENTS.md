@@ -64,7 +64,7 @@ A **catraca** recusa achado novo de `golangci-lint` ou `gosec`: o baseline em
 
 ```sh
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-go install github.com/securego/gosec/v2/cmd/gosec@v2.22.9
+go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
 ```
 
 **Mexeu em `.github/workflows/`? Rode `actionlint`.** Erro de workflow não
