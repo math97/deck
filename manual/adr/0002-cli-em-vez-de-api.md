@@ -50,5 +50,5 @@ programa** (`herdr api schema --json` e `gh --json` são a autoridade), e
 ## Onde vive
 
 `internal/herdr/herdr.go:run` — envelope e códigos de erro.
-`internal/gh/gh.go:PostComment` — a única escrita.
-O que os sistemas reais ensinaram: [`../caminho-vivo.md`](../caminho-vivo.md).
+`internal/gh/gh.go:PostComment` — a única escrita, coberta por
+`TestLivePostReview` (atrás de `DECK_LIVE_PR`, publica de verdade).

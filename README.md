@@ -1,16 +1,47 @@
 # deck
 
 Board kanban dentro do terminal, definido em markdown, feito para não sair do
-terminal enquanto se organiza e se toca trabalho com agentes.
+terminal enquanto se organiza e se toca trabalho com agentes de código.
 
-O markdown é a fonte da verdade. O TUI é só uma view: se o board quebrar, os
-arquivos continuam lá, legíveis e versionáveis no git.
+**O markdown é a fonte da verdade.** Colunas, cards e configuração são arquivos
+com frontmatter; o TUI é só uma view sobre eles. O board inteiro vive dentro do
+repositório, então ele diffa, versiona e revisa em PR como qualquer código — e
+se o TUI quebrar, os arquivos continuam lá, legíveis num editor.
+
+Cada coluna pode carregar um prompt. Mover um card para ela dispara um agente
+naquele prompt, num pane próprio e numa worktree própria, e a saída volta para
+o card como artefato. Nada disso é obrigatório: sem `herdr` e sem `gh`, o deck
+é um board de markdown que funciona igual.
+
+## Requisitos
+
+| | | |
+|---|---|---|
+| Go 1.27+ | para compilar | obrigatório |
+| [`gh`](https://cli.github.com) | badges de PR, importar issue, publicar review | opcional |
+| [`herdr`](https://herdr.dev) | disparar e acompanhar agentes | opcional |
+| `git` | worktree por card | opcional |
+
+O deck **não guarda credencial nenhuma** e não fala com API de modelo: ele
+chama o `gh` e o `herdr` como CLI e herda a autenticação que você já tem no
+terminal. Por quê: [ADR-0002](manual/adr/0002-cli-em-vez-de-api.md),
+[ADR-0003](manual/adr/0003-sem-api-de-modelo.md).
 
 ## Instalação
 
 ```sh
+go install github.com/matheusalbuquerque/deck/cmd/deck@latest
+```
+
+Ou a partir do código:
+
+```sh
+git clone https://github.com/matheusalbuquerque/deck
+cd deck
 go build -o ~/.local/bin/deck ./cmd/deck
 ```
+
+Garanta que `~/.local/bin` (ou `$(go env GOPATH)/bin`) está no `PATH`.
 
 ## Uso
 
@@ -351,14 +382,40 @@ No detalhe do card, `j`/`k` rolam o corpo e `g` volta ao topo.
 
 ## Estado
 
-Funcional e testado: board navegável com rolagem, colunas e prompts editáveis,
-cards com log automático e arquivamento, artefatos por coluna, busca, badges de
-PR, publicação de review, disparo/acompanhamento/liberação de agentes, e captura
-do desfecho de volta no card.
+Funcional e coberto por teste: board navegável com rolagem, colunas e prompts
+editáveis, cards com log automático e arquivamento, artefatos por coluna, busca,
+badges de PR, publicação de review, disparo/acompanhamento/liberação de agentes,
+worktree por card, e captura do desfecho de volta no card.
 
-**Nunca rodou contra um herdr vivo nem contra um PR real.** Todo o caminho de
-agentes foi escrito a partir de `herdr api schema` e coberto por teste, mas o
-split, o start, o prompt, a captura e a publicação no PR ainda não foram
-exercitados de verdade. Espere ajustes.
+O caminho que fala com sistema externo foi exercitado contra os sistemas reais,
+não só contra schema e teste — e rendeu seis correções em código que já tinha
+teste passando. O `gh pr comment` publicou num PR de verdade.
 
-Ideias para depois: Jira como terceira fonte ao lado do GitHub.
+**O que ainda não rodou ponta a ponta é o ciclo do agente fechando dentro de um
+pane**: o agente terminar, o deck capturar o artefato e registrar no `## Log`.
+Espere ajustes aí.
+
+Não está no roadmap: importação de Jira, sincronia de status com tracker
+externo, e cliente de API de modelo dentro do deck. Os motivos estão nos ADRs.
+
+## Contribuindo
+
+Leia [`AGENTS.md`](AGENTS.md) — ele vale para pessoa e para agente de código.
+O portão é:
+
+```sh
+go build ./... && go vet ./... && gofmt -l . && go test ./...
+```
+
+`gofmt -l .` tem que sair vazio. Não há Makefile nem linter extra.
+
+Um commit por ideia, com corpo explicando **por quê** — o diff já mostra o quê.
+Comentários, mensagens de erro, texto de UI e commits em português;
+identificadores em inglês.
+
+Mudança que descarta uma alternativa real vira um
+[ADR](manual/adr/README.md). Comportamento novo entra com teste.
+
+## Licença
+
+A definir antes da publicação.

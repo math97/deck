@@ -7,9 +7,8 @@ sem isto, um agente ou uma pessoa nova refaz decisões que já custaram caro.
 |---|---|---|
 | [`adr/`](adr/README.md) | **por que X e não Y**, e o que já falhou | decisão é fato histórico; sem ela, o caminho errado se repete |
 | [`go-patterns.md`](go-patterns.md) | padrões de Go com exemplos daqui | o `AGENTS.md` manda ler antes de escrever código |
-| [`regras.md`](regras.md) | 16 invariantes numeradas | `internal/board/regras_test.go` cita cada uma pelo número |
+| [`regras.md`](regras.md) | 16 invariantes numeradas | cada uma cita o teste que a garante, e `TestIndiceDeRegras` prova que a tabela não apodreceu |
 | [`security.md`](security.md) | modelo de ameaça e mitigações | explica por que partes do código são defensivas |
-| [`caminho-vivo.md`](caminho-vivo.md) | o que o herdr e o `gh` reais ensinaram | seis bugs; sem ele, voltam |
 
 ## O que entra aqui, o que não
 
