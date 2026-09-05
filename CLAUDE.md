@@ -4,11 +4,17 @@ Board kanban dentro do terminal, em Go. Colunas e cards são arquivos markdown;
 o TUI é uma view descartável sobre eles. Integra com o [herdr](https://herdr.dev)
 para disparar e acompanhar agentes, e com o `gh` para estado de PR.
 
-Padrões de Go, com exemplos deste código: [`docs/go-patterns.md`](docs/go-patterns.md).
 Instruções para agentes disparados pelo board: [`AGENTS.md`](AGENTS.md).
-Invariantes numeradas, cada uma com teste: [`docs/regras.md`](docs/regras.md).
-Modelo de ameaça e o que foi mitigado: [`docs/security.md`](docs/security.md).
-O que o herdr real ensinou: [`docs/caminho-vivo.md`](docs/caminho-vivo.md).
+
+**`docs/` não é versionado.** Só existe na máquina de quem trabalha no projeto,
+e num clone limpo não vem nada dele — se um link abaixo não abrir, é isso, não
+um arquivo perdido. O que o código precisa garantir mora em teste, não lá.
+
+- `docs/go-patterns.md` — padrões de Go, com exemplos deste código
+- `docs/regras.md` — invariantes numeradas, cada uma com teste
+- `docs/security.md` — modelo de ameaça e o que foi mitigado
+- `docs/caminho-vivo.md` — o que o herdr e o `gh` reais ensinaram
+- `docs/teste-no-pane.md` — roteiro do TUI dentro de um pane (em aberto)
 
 ## Comandos
 

@@ -6,6 +6,9 @@ Leia [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md) e
 [`docs/go-patterns.md`](docs/go-patterns.md) antes de escrever código. Este
 arquivo é só o mapa do que falta.
 
+`docs/` **não é versionado** — as referências a ele daqui para baixo só abrem na
+máquina de quem trabalha no projeto.
+
 ---
 
 ## Onde estamos
@@ -66,9 +69,10 @@ projeto que nunca rodou num sistema real.
 
 Sobrou **só o TUI dentro de um pane**. O `R` foi fechado — ver acima.
 
-Abrir o `deck` num pane do herdr e olhar o rodapé primeiro: se não mostrar
-`s agente · f pane`, o `HERDR_ENV` não chegou ao processo e nada além disso vai
-funcionar. Depois, exercitar `s`, `f` e `c` num projeto real.
+O roteiro item a item está em `docs/teste-no-pane.md`, com o que observar em
+cada passo e o que já passou. O portão (`HERDR_ENV` chegando, `s` e `f`) já
+passou; o que falta é o ciclo **fechar** — o agente terminar e o deck capturar
+o artefato — e o `c` com worktree suja.
 
 O que mais provavelmente ainda quebra: a entrega tardia do prompt quando o
 agente destrava, e o `agent read` num agente em tela alternativa — neste caso o
