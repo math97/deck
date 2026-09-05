@@ -4,31 +4,9 @@ Board kanban dentro do terminal, em Go. Colunas e cards são arquivos markdown;
 o TUI é uma view descartável sobre eles. Integra com o [herdr](https://herdr.dev)
 para disparar e acompanhar agentes, e com o `gh` para estado de PR.
 
-Instruções para agentes disparados pelo board: [`AGENTS.md`](AGENTS.md).
-
-## Onde os documentos moram
-
-Dois lugares, com um critério só: **o que alguém precisa para não errar é
-versionado; rascunho é local.**
-
-**[`manual/`](manual/README.md) — versionado.** O que é preciso saber antes de
-mexer no código. Se sumisse, decisões que já custaram caro seriam refeitas.
-
-- [`manual/go-patterns.md`](manual/go-patterns.md) — padrões de Go, com exemplos deste código
-- [`manual/regras.md`](manual/regras.md) — invariantes numeradas, cada uma com teste
-- [`manual/security.md`](manual/security.md) — modelo de ameaça e o que foi mitigado
-- [`manual/caminho-vivo.md`](manual/caminho-vivo.md) — o que o herdr e o `gh` reais ensinaram
-
-**`docs/` — local, no `.gitignore`.** Espaço de trabalho do dono do projeto:
-rascunho, roteiro em aberto, anotação de investigação. Num clone limpo não vem
-nada dele, então **nada aqui pode depender de `docs/`** — nem link em documento
-versionado, nem comentário em código. Hoje mora lá o `docs/teste-no-pane.md`,
-roteiro do TUI dentro de um pane.
-
-Se você está escrevendo um documento e não sabe qual dos dois: pergunte se um
-agente que chega sem contexto erraria sem ele. Se sim, `manual/`. Se não, ou é
-`docs/`, ou não devia ser documento — vira comentário na linha que explica, ou
-corpo de commit.
+**Este arquivo é mapa, não manual.** Ele diz onde procurar. O *porquê* de cada
+decisão está nos [ADRs](manual/adr/README.md); o *quê* está no código e no
+teste, que são a fonte da verdade quando divergirem daqui.
 
 ## Comandos
 
@@ -41,7 +19,7 @@ go vet ./... && gofmt -l .                 # ambos precisam sair limpos
 
 Não há Makefile nem linter extra. `go vet` e `gofmt -l .` são o portão.
 
-## Arquitetura
+## Onde está cada coisa
 
 ```
 cmd/deck/       CLI: init, ls, new, prompt, e o TUI
@@ -55,132 +33,93 @@ internal/herdr/ wrapper sobre o CLI do herdr
 `board` é o núcleo e não importa nada de UI. `ui` orquestra; `gh` e `herdr`
 falam com processos externos e não conhecem `board`.
 
-## Princípios que o código segue
+| quero mexer em… | comece por | ADR |
+|---|---|---|
+| leitura/escrita de arquivo do board | `board/frontmatter.go`, `board/store.go:Save` | [0001](manual/adr/0001-markdown-e-a-fonte-da-verdade.md) |
+| tecla nova, fluxo de tecla | `ui/update.go:Update` | — |
+| o que aparece na tela | `ui/view.go`, `ui/render.go` | — |
+| ordenação, filtro, cursor | `ui/model.go:cardsIn` — **a mesma para view e cursor** | [0001](manual/adr/0001-markdown-e-a-fonte-da-verdade.md) |
+| rolagem | `ui/scroll.go:windowCards`, `windowColumns` — puras, sem offset | — |
+| confirmação de ação | `ui/update.go`, `modeConfirm` — padrão **não** | — |
+| disparar agente | `ui/agents.go:startAgent` | [0003](manual/adr/0003-sem-api-de-modelo.md), [0004](manual/adr/0004-agente-nao-pronto-esta-vivo.md) |
+| capturar resultado do agente | `ui/capture.go`, `ui/update.go:detectFinished` | [0004](manual/adr/0004-agente-nao-pronto-esta-vivo.md) |
+| estado de PR, publicar review | `gh/gh.go`, `ui/review.go` | [0002](manual/adr/0002-cli-em-vez-de-api.md) |
+| chamar o herdr | `herdr/herdr.go:run` | [0002](manual/adr/0002-cli-em-vez-de-api.md) |
+| worktree por card | `ui/agents.go`, `herdr worktree create` | — |
+| skills como prompt | `skill/skill.go`, `board.Skills` (injetada pelo `cmd`) | — |
 
-Se você for mexer aqui, estas decisões já foram tomadas e têm teste:
+## Documentos
 
-**O markdown é a fonte da verdade.** Nada de banco, nada de estado escondido.
-Qualquer coisa que o TUI faça tem que dar para fazer editando arquivo à mão.
+| onde | o que | versionado? |
+|---|---|---|
+| [`manual/adr/`](manual/adr/README.md) | **por que X e não Y**, o que falhou | sim |
+| [`manual/regras.md`](manual/regras.md) | 16 invariantes, cada uma com teste | sim |
+| [`manual/go-patterns.md`](manual/go-patterns.md) | padrões de Go com exemplos daqui | sim |
+| [`manual/security.md`](manual/security.md) | modelo de ameaça e mitigações | sim |
+| [`manual/caminho-vivo.md`](manual/caminho-vivo.md) | o que o herdr e o `gh` reais ensinaram | sim |
+| [`AGENTS.md`](AGENTS.md) | como trabalhar neste repo | sim |
+| `docs/` | roadmap e rascunho do dono do projeto | **não** |
 
-**Nada do usuário se perde.**
-- Campo desconhecido no frontmatter (`jira:`, `assignee:`) sobrevive ao salvar
-- Card apontando para coluna inexistente vai para a coluna `?` visível, com
-  aviso na barra — nunca some
-- Frontmatter sem fechamento vira corpo em vez de derrubar o board
-- Escrita atômica: arquivo temporário + rename
-- Renomear coluna troca só o título; a key permanece, então nada orfana
-- `d` arquiva (move para `.deck/archive/`), não apaga
+**Nada versionado pode depender de `docs/`** — num clone limpo ele não existe.
 
-**Ação irreversível ou pública pede confirmação.** Publicar review no PR (`R`),
-arquivar card (`d`) e fechar o pane de um agente (`c`) passam por `modeConfirm`,
-cujo padrão é **não**: só `s`/`y`/`enter` seguem adiante.
+Documento novo: se um agente sem contexto erraria sem ele, vai para `manual/`;
+se registra uma decisão com alternativa descartada, vai para `manual/adr/`. Se
+não é nenhum dos dois, vira comentário na linha que explica, ou corpo de commit.
 
-**A view e o cursor usam a mesma função de ordenação** (`Model.cardsIn`). Se
-divergissem, você selecionaria um card e moveria outro. Filtro e "bloqueados no
-topo" entram os dois ali.
+## O que vale em toda seção
 
-**Rolagem não guarda offset.** `windowCards` e `windowColumns` são puras: o que
-está em foco determina o que aparece. Um offset persistido teria como se
-dessincronizar do cursor.
+Isto se aplica a qualquer mudança, em qualquer pacote.
 
-**Um formato só.** Colunas, cards, config e artefatos são todos markdown com
-frontmatter, lidos pelo mesmo parser (`internal/board/frontmatter.go`).
+**Nada do usuário se perde.** Campo desconhecido no frontmatter sobrevive ao
+salvar; card órfão vai para a coluna `?` visível; frontmatter sem fechamento
+vira corpo em vez de derrubar o board; escrita é atômica (temp + rename); `d`
+arquiva em `.deck/archive/`, não apaga. Provado em `board/regras_test.go`.
 
-**O nome do artefato é a key da coluna que o produziu.** Uma regra, zero
-configuração. Um card vira pasta automaticamente na primeira gravação.
+**Ação irreversível ou pública pede confirmação**, com padrão em **não**: `R`
+(publica no PR), `d` (arquiva), `c` (fecha pane). Valide as pré-condições
+*antes* de abrir o diálogo.
 
-**Nada caro na abertura.** `gh auth status` custa ~300ms porque consulta a API;
-por isso `New()` usa só `gh.Installed()` (LookPath) e a sessão é verificada em
-segundo plano, por comando. Qualquer coisa que fale com processo externo segue
-essa regra.
+**Nada caro na abertura.** `gh auth status` custa ~300ms. `New()` usa só
+`gh.Installed()` (LookPath); o resto vai para `tea.Cmd` em segundo plano.
 
-**Integração desligada nunca quebra nada.** Sem `gh` autenticado, sem herdr, ou
-com `github: off` no config: o board funciona igual, só sem aquilo.
+**Integração desligada nunca quebra nada.** Sem `gh`, sem herdr, ou com
+`github: off`: o board funciona igual, só sem aquilo. Vale também para
+integração *quebrada* — URL de PR errada vira badge `PR ?`, não erro.
 
-## Falando com processos externos
+**Não invente o JSON de outro programa.** `herdr api schema --json` e
+`gh <cmd> --json` são a autoridade. E **nunca construa ID do herdr**: pane
+fechado não reutiliza ID.
 
-`gh` e `herdr` são chamados como CLI, não via API. É deliberado: herda a
-autenticação que o usuário já tem, funciona com Enterprise sem configuração, e
-o deck não guarda credencial nenhuma.
+**Um formato só.** Colunas, cards, config e artefatos são markdown com
+frontmatter, no mesmo parser. O nome do artefato é a key da coluna que o
+produziu — uma regra, zero configuração.
 
-**O schema do herdr é a autoridade.** Rode `herdr api schema --json` para os
-formatos; não adivinhe. Envelope é `{id, result}`; erro vai para o stderr como
-`{id, error:{code,message}}` com saída 1.
-
-**Nunca construa IDs do herdr.** Pane fechado não reutiliza ID, e pane movido de
-workspace ganha ID novo. Leia sempre da resposta.
-
-**O deck só controla o herdr de dentro dele** (`HERDR_ENV=1`). Fora, as ações
-avisam em vez de tentar.
+**Idioma:** comentários, erros, texto de UI e commits em **português**;
+identificadores em inglês.
 
 ## Testes
 
 Todo comportamento novo entra com teste. Os de UI dirigem o `Model` por
 `tea.KeyMsg` sem terminal — veja `press` e `typeText` em `internal/ui/ui_test.go`.
 
-**Asserções sobre o corpo do card precisam de `plain()`.** O glamour intercala
-ANSI entre as palavras, inclusive nos espaços; `strings.Contains` na saída crua
-falha mesmo com o texto na tela.
-
-Benchmarks em `internal/ui/bench_test.go` cobrem o custo de um frame. Rode-os ao
-mexer em render: `go test ./internal/ui/ -bench . -benchtime=50x -run XXX`.
-
-Para inspecionar visualmente, escreva um teste temporário que monte o `Model`,
-fixe `width`/`height` e imprima `m.View()`. Não tente capturar o TUI num PTY —
-o Bubble Tea segura o stdin e trava.
-
-## Skills e provedores
-
-Uma coluna pode apontar para uma skill (`skill: <nome>`) em vez de ter prompt
-próprio. O corpo da skill é **inlinado** no prompt, não invocado como
-`/nome`: assim funciona com qualquer agent kind, não só Claude Code.
-
-`agent_kind` é uma cadeia (`claude, opencode`): o `startAgent` tenta em ordem e
-segue no primeiro que subir. É o que permite continuar quando a cota de um
-provedor acaba. O provedor usado vai para o `## Log` do card.
-
-O deck **não fala com API de modelo**. Acesso a OpenRouter, OmniRouter e afins
-acontece dentro do `opencode`, que o usuário configura. Isso mantém o deck sem
-chave de API, sem dependência de rede no caminho de execução, e com um único
-modelo de execução (agente em pane do herdr) — que é o que evita precisar de uma
-segunda implementação de backend.
-
-`herdr.KnownKinds()` lê a lista de tipos do próprio binário em vez de fixá-la no
-código: cada versão do herdr suporta um conjunto diferente, e uma cópia aqui
-envelheceria em silêncio.
-
-`board` não conhece o disco de skills: `board.Skills` é uma função injetada
-pelo `cmd`, o que mantém o núcleo puro e deixa o teste usar uma skill de
-mentira.
-
-## Worktree
-
-Com `worktree: auto` (padrão), `s` cria um checkout e branch próprios do card
-(`deck/<card-id>`) via `herdr worktree create`, que já devolve workspace, aba e
-pane — não é preciso `pane split`. Sem repositório git, cai no split simples.
-
-`c` fecha o pane e remove a worktree **sem `--force`**: com trabalho não
-commitado o herdr recusa, e recusar é o certo. Descartar checkout sujo é decisão
-do usuário, fora do deck.
-
-## Idioma
-
-Comentários, mensagens de erro, texto de UI e commits em **português**.
-Identificadores em inglês.
+- **`plain()` nas asserções sobre texto renderizado** — o glamour intercala ANSI
+  entre as palavras, inclusive nos espaços.
+- **Não capture o TUI num PTY** — o Bubble Tea segura o stdin e trava. Monte o
+  `Model`, fixe `width`/`height`, imprima `m.View()`.
+- **Benchmarks de frame:** `go test ./internal/ui/ -bench . -benchtime=50x -run XXX`.
+- **Teste que escreve em sistema externo fica atrás de variável de ambiente.**
+  `TestLivePostReview` publica num PR de verdade e só roda com `DECK_LIVE_PR`.
+  A suíte normal nunca publica nada.
 
 ## Estado atual
-
-O backlog priorizado mora em `docs/HANDOFF.md`, que é **local**: é o roadmap do
-dono do projeto, não do repositório. Se você não o tem, o que está abaixo é o
-que precisa saber — e nada aqui depende dele.
 
 Funcional e coberto por teste. Todo caminho que fala com sistema externo já foi
 exercitado contra o sistema real — o herdr rendeu três correções, o `gh pr
 comment` passou sem nenhuma. Ver [`manual/caminho-vivo.md`](manual/caminho-vivo.md).
 
-**O que ainda nunca rodou de verdade é o TUI dentro de um pane do herdr.**
+**O que ainda nunca rodou de verdade é o ciclo do agente fechando dentro de um
+pane** — o agente terminar, o deck capturar o artefato e registrar no `## Log`.
 Espere ajustes ao exercitar isso.
 
-O `R` tem harness vivo: `TestLivePostReview` publica num PR de verdade e por
-isso fica atrás de `DECK_LIVE_PR`. Todo teste que escreve num sistema externo
-segue essa regra — a suíte normal nunca publica nada.
+O backlog priorizado mora em `docs/HANDOFF.md`, que é local. Sem ele, o que está
+acima é o suficiente; quando faltar prioridade, pergunte em vez de escolher.
