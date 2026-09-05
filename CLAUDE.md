@@ -15,9 +15,15 @@ go build -o ~/.local/bin/deck ./cmd/deck   # instalar
 go test ./...                              # todos os testes
 go test ./internal/board/ -run TestNome -v # um teste
 go vet ./... && gofmt -l .                 # ambos precisam sair limpos
+go run ./tools/ratchet conferir            # a catraca do quality gate
 ```
 
-Não há Makefile nem linter extra. `go vet` e `gofmt -l .` são o portão.
+Não há Makefile. `go vet` e `gofmt -l .` são bloqueantes e já saem limpos.
+
+O `golangci-lint` e o `gosec` passam pela **catraca**: o estado de hoje está em
+`.ci/baseline.txt` e só pode descer. Achado novo reprova o PR; correção derruba
+o teto sozinha depois do merge. Ver
+[ADR-0005](manual/adr/0005-catraca-so-afrouxa-depois-do-merge.md).
 
 ## Onde está cada coisa
 
@@ -47,6 +53,7 @@ falam com processos externos e não conhecem `board`.
 | chamar o herdr | `herdr/herdr.go:run` | [0002](manual/adr/0002-cli-em-vez-de-api.md) |
 | worktree por card | `ui/agents.go`, `herdr worktree create` | — |
 | skills como prompt | `skill/skill.go`, `board.Skills` (injetada pelo `cmd`) | — |
+| CI, gates, baseline | `.github/workflows/ci.yml`, `tools/ratchet/` | [0005](manual/adr/0005-catraca-so-afrouxa-depois-do-merge.md), [0006](manual/adr/0006-govulncheck-nao-bloqueia-pr.md) |
 
 ## Documentos
 

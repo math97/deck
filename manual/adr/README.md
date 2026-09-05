@@ -52,6 +52,8 @@ para agente.
 | [0002](0002-cli-em-vez-de-api.md) | `gh` e `herdr` são chamados como CLI, não pela API | aceita |
 | [0003](0003-sem-api-de-modelo.md) | O deck não fala com API de modelo | aceita |
 | [0004](0004-agente-nao-pronto-esta-vivo.md) | `agent_not_ready` significa agente vivo, não falha | aceita |
+| [0005](0005-catraca-so-afrouxa-depois-do-merge.md) | A catraca só afrouxa depois do merge | aceita |
+| [0006](0006-govulncheck-nao-bloqueia-pr.md) | `govulncheck` não bloqueia PR | aceita |
 
 ## Quando escrever um
 
