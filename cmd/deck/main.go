@@ -84,8 +84,10 @@ func run(args []string, cwd string, out io.Writer) error {
 	case "prompt":
 		return runPrompt(args[1:], cwd, out)
 	case "version", "-v", "--version":
-		fmt.Fprintln(out, version)
-		return nil
+		// Devolve o erro em vez de descartar: `deck version | head -0` fecha o
+		// pipe, e falhar em silêncio esconderia isso de quem encadeia comandos.
+		_, err := fmt.Fprintln(out, version)
+		return err
 	case "help", "-h", "--help":
 		fmt.Fprint(out, usage)
 		return nil

@@ -52,11 +52,24 @@ de escolher por conta própria.
 
 ```sh
 go build ./... && go vet ./... && gofmt -l . && go test ./...
+go run ./tools/ratchet conferir
 ```
 
 `gofmt -l .` tem que sair vazio; os quatro têm que passar. Não entregue com teste
 quebrado alegando que "não tem a ver com a mudança" — ou você quebrou, ou o teste
 estava errado, e nos dois casos é preciso resolver.
+
+A **catraca** recusa achado novo de `golangci-lint` ou `gosec`: o baseline em
+`.ci/baseline.txt` só desce. Ela precisa das duas ferramentas no `PATH`:
+
+```sh
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+go install github.com/securego/gosec/v2/cmd/gosec@v2.22.9
+```
+
+**Não suba o baseline para calar um achado.** Se ele for legítimo, diga por quê
+no corpo do commit — o diff do baseline é revisável, e é para isso que ele é um
+arquivo e não um número escondido.
 
 Para mexer em render ou em algo no caminho de cada frame, rode também:
 
