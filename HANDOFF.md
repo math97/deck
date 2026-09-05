@@ -62,6 +62,19 @@ pane do herdr, confirmar que o rodapé mostra `s agente · f pane` (se não
 mostrar, `HERDR_ENV` não chegou e nada mais funciona), e exercitar `s`, `f`,
 `c` e `R` num projeto real com um PR seu.
 
+Para o `R` há um harness pronto: `TestLivePostReview` em
+`internal/ui/live_pr_test.go`. Ele monta o board, escreve um artefato de
+review de verdade, aperta `R`, confirma com `s` e executa o `tea.Cmd` que
+publica — o mesmo caminho do teclado, sem TUI. Fica atrás de `DECK_LIVE_PR`
+porque publica comentário público e irreversível:
+
+```sh
+DECK_LIVE_PR=https://github.com/voce/repo/pull/1 \
+  go test ./internal/ui/ -run TestLivePostReview -v
+```
+
+Sem a variável ele pula, então não atrapalha a suíte.
+
 O que mais provavelmente ainda quebra: a entrega tardia do prompt quando o
 agente destrava, e o `agent read` num agente em tela alternativa — neste caso o
 log dizer que não conseguiu ler é o comportamento **correto**, não um bug.
@@ -86,30 +99,24 @@ como previsto: arquivar coluna não removia da lista em memória (dava para zera
 o board), e "review não vazio" media bytes em vez de conteúdo (um review em
 branco ia para o PR).
 
-### 4. Importação de Jira — ganho médio, complexidade média
+### ~~4. Importação de Jira~~ e ~~5. Puxar a sprint~~ — retirados do roadmap
 
-Mesmo formato do `I` do GitHub: um adaptador ao lado de `internal/gh`. **Não é
-arquitetural.**
+Decisão do dono do projeto: o deck não importa de tracker corporativo. Ficam
+registrados aqui como não-objetivos, não como trabalho adiado.
 
-O trabalho real é a autenticação: Jira quer base URL, e-mail e API token. Decidir
-onde isso mora — variável de ambiente é o caminho que não coloca segredo em
-arquivo versionado. O `config.md` guarda a URL base; o token, não.
+O que cada um teria custado, para o caso de a decisão ser revista: o Jira pedia
+um adaptador ao lado de `internal/gh` (fácil) mais uma decisão sobre onde mora
+o API token (o difícil — segredo que não pode cair em arquivo versionado) e uma
+conversão de ADF para markdown. Puxar a sprint era `NewCardFromSource` em lote,
+com `sprint` no `config.md` e deduplicação por URL.
 
-Campos a trazer: chave (`PROJ-42`), sumário, descrição (Jira usa ADF em v3 —
-converter para markdown ou pedir `renderedFields`), status, assignee.
+A metade que *empurra* status de volta ao tracker já tinha saído antes, e por um
+motivo mais forte que preferência: dá ao tracker co-propriedade do estado do
+card e contradiz o princípio de que o markdown é a fonte da verdade — passaria a
+existir conflito, ordem de precedência e cursor de sincronia. Isso continua
+valendo se o assunto voltar.
 
-### 5. Puxar a sprint — ganho alto, complexidade média
-
-Do item de sincronia de sprint, sobra só a metade segura: importar em lote os
-tickets da sprint atribuídos a você. É `NewCardFromSource` repetido, com um
-`sprint` no `config.md` e deduplicação por URL.
-
-**A metade que empurra foi retirada do backlog.** Escrever status de volta no
-tracker dá a ele co-propriedade do estado do card, e isso contradiz o princípio
-de que o markdown é a fonte da verdade: passaria a existir conflito, ordem de
-precedência e cursor de sincronia — arquitetura nova para resolver um problema
-que o board não tem hoje. Se voltar algum dia, volta como decisão consciente de
-mudar aquele princípio, não como continuação natural do "puxar".
+O `I` do GitHub segue sendo o único caminho de importação.
 
 ### ~~6. OpenRouter / OmniRouter~~ — resolvido sem código
 
