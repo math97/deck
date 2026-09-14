@@ -746,6 +746,23 @@ func TestDetectFinishedFiresOnSeenIdle(t *testing.T) {
 	}
 }
 
+// Agente que subiu parado na pergunta de confiança ainda não recebeu a tarefa.
+// Quando o usuário responde, o provedor termina de carregar — working → idle —
+// e isso não é fim de rodada: a rodada nem começou.
+func TestDetectFinishedIgnoresAgentWithPendingTask(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "pendente", "card-pend")
+	m.pendingPrompts["card-pend"] = "a tarefa"
+
+	m.agents = agentsMsg{"card-pend": herdr.Agent{Name: "card-pend", Status: herdr.StatusWorking}}
+	cmds := m.detectFinished(agentsMsg{
+		"card-pend": herdr.Agent{Name: "card-pend", Status: herdr.StatusIdle},
+	})
+	if len(cmds) != 0 {
+		t.Errorf("agente com tarefa pendente não terminou rodada nenhuma: %d capturas", len(cmds))
+	}
+}
+
 // done → idle é o usuário abrindo a aba de um agente que já foi capturado.
 func TestDetectFinishedIgnoresDoneBecomingSeen(t *testing.T) {
 	m := newTestModel(t)

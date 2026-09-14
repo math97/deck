@@ -669,6 +669,12 @@ func (m *Model) detectFinished(next agentsMsg) []tea.Cmd {
 		if !had {
 			continue
 		}
+		// Tarefa ainda pendente: o agente subiu parado numa pergunta e a rodada
+		// nem começou. Quando o usuário responde, o provedor termina de carregar
+		// e pode ir de working a idle — isso não é fim de nada.
+		if _, pending := m.pendingPrompts[name]; pending {
+			continue
+		}
 
 		// Bloqueou agora: avisa, mas não captura — o agente não terminou.
 		if now.Status == herdr.StatusBlocked && prev.Status != herdr.StatusBlocked {
