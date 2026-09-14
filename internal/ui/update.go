@@ -62,7 +62,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.agentStarted(msg)
 
 	case promptSentMsg:
-		if msg.err != nil {
+		code := herdr.Code(msg.err)
+		if (code == herdr.CodeAgentNotReady || code == herdr.CodeAgentBlocked) && msg.prompt != "" {
+			// O agente ainda não estava pronto: a tarefa volta para a fila e o
+			// poller tenta de novo, em vez de sumir sem rastro.
+			m.pendingPrompts[msg.name] = msg.prompt
+			m.setStatus(false, "agente %s ainda não estava pronto — a tarefa segue pendente", msg.name)
+		} else if msg.err != nil {
 			m.setStatus(false, "agente %s não recebeu a tarefa: %v", msg.name, msg.err)
 		} else {
 			m.setStatus(true, "tarefa entregue ao agente %s", msg.name)
@@ -712,7 +718,10 @@ func (m *Model) deliverPending(next agentsMsg) []tea.Cmd {
 			delete(m.pendingPrompts, name)
 			continue
 		}
-		if ag.Status == herdr.StatusBlocked {
+		// Só `idle` e `done` aceitam tarefa. Logo depois do start o agente passa
+		// por `unknown` antes de virar `blocked`, e entregar ali o herdr recusa
+		// com agent_not_ready.
+		if ag.Status != herdr.StatusIdle && ag.Status != herdr.StatusDone {
 			continue
 		}
 		delete(m.pendingPrompts, name)

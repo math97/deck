@@ -1581,6 +1581,45 @@ func TestTarefaPendenteSoSaiQuandoOAgenteLibera(t *testing.T) {
 	}
 }
 
+// TestTarefaPendenteEsperaOAgenteSairDoUnknown: logo depois do `agent start`
+// o agente aparece como `unknown` com launch_pending, e só depois vira
+// `blocked`. Entregar nesse intervalo o herdr recusa com agent_not_ready — visto
+// em campo: a tarefa sumiu e o agente ficou parado sem nada no pane.
+func TestTarefaPendenteEsperaOAgenteSairDoUnknown(t *testing.T) {
+	m := newTestModel(t)
+	m.pendingPrompts["card-x"] = "a tarefa"
+
+	for _, s := range []herdr.Status{herdr.StatusUnknown, herdr.StatusWorking} {
+		if cmds := m.deliverPending(agentsMsg{"card-x": {Name: "card-x", Status: s}}); len(cmds) != 0 {
+			t.Errorf("agente em %s não deveria receber a tarefa", s)
+		}
+	}
+	if m.pendingPrompts["card-x"] != "a tarefa" {
+		t.Error("a tarefa deveria continuar pendente")
+	}
+}
+
+// TestTarefaRecusadaVoltaParaPendente: deliverPending tira a tarefa da fila
+// antes de mandar. Se o herdr recusar por o agente ainda não estar pronto, a
+// tarefa tem que voltar — senão some, e só a barra de status sabia disso.
+func TestTarefaRecusadaVoltaParaPendente(t *testing.T) {
+	m := newTestModel(t)
+	m.agents = agentsMsg{"card-x": {Name: "card-x", Status: herdr.StatusIdle}}
+
+	for _, code := range []string{herdr.CodeAgentNotReady, herdr.CodeAgentBlocked} {
+		next, _ := m.Update(promptSentMsg{
+			name:   "card-x",
+			prompt: "a tarefa",
+			err:    &herdr.Error{Op: "agent", Code: code, Message: "ainda não"},
+		})
+		m = next.(Model)
+		if m.pendingPrompts["card-x"] != "a tarefa" {
+			t.Errorf("recusa %s deveria devolver a tarefa à fila: %v", code, m.pendingPrompts)
+		}
+		delete(m.pendingPrompts, "card-x")
+	}
+}
+
 // TestTarefaPendenteMorreComOAgente: agente que sumiu não tem o que receber.
 func TestTarefaPendenteMorreComOAgente(t *testing.T) {
 	m := newTestModel(t)

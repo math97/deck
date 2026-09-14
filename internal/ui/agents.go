@@ -47,8 +47,9 @@ type agentStartedMsg struct {
 
 // promptSentMsg é a entrega tardia de uma tarefa que esperou o agente liberar.
 type promptSentMsg struct {
-	name string
-	err  error
+	name   string
+	prompt string // volta para a fila se o herdr recusar por o agente não estar pronto
+	err    error
 }
 
 // sendPrompt entrega a tarefa a um agente que já está pronto para recebê-la.
@@ -56,7 +57,7 @@ func sendPrompt(name, prompt string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return promptSentMsg{name: name, err: herdr.AgentPrompt(ctx, name, prompt)}
+		return promptSentMsg{name: name, prompt: prompt, err: herdr.AgentPrompt(ctx, name, prompt)}
 	}
 }
 
