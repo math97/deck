@@ -671,7 +671,13 @@ func (m *Model) detectFinished(next agentsMsg) []tea.Cmd {
 			continue
 		}
 
-		if now.Status != herdr.StatusDone || prev.Status == herdr.StatusDone {
+		// O herdr só diz `done` quando a aba do agente não foi vista; na aba que o
+		// usuário está olhando o mesmo fim chega como `idle`. Então o fim é
+		// chegar a `done`, ou sair de `working` para `idle`. `done → idle` é só
+		// o usuário abrindo a aba de uma rodada já capturada.
+		finished := (now.Status == herdr.StatusDone && prev.Status != herdr.StatusDone) ||
+			(now.Status == herdr.StatusIdle && prev.Status == herdr.StatusWorking)
+		if !finished {
 			continue
 		}
 
