@@ -44,6 +44,13 @@ TUI. O board acompanha o trabalho; não o autoriza.
 | R6 | `d` arquiva: move para `.deck/archive/`, nunca apaga. | `TestRegraArquivarPreservaOCard` |
 | R7 | Card apontando para coluna inexistente vai para a coluna `?` e continua visível, com aviso na barra. | `TestRegraCardOrfaoNuncaSome` |
 | R8 | Campo desconhecido no frontmatter (`jira:`, `assignee:`) sobrevive ao salvar. | `TestRegraCampoDesconhecidoSobrevive` |
+| R17 | Gravar um card relê o `card.md` do disco antes: o que o agente, o editor ou você escreveram por fora sobrevive ao save seguinte do deck. | `TestRegraGravarCardNaoApagaEdicaoExterna` |
+
+R17 nasceu em campo. O card vira pasta quando ganha artefato, o observador não
+via dentro dessas pastas, e a captura do fim de um agente de refine gravou a
+cópia em memória por cima do corpo que o agente tinha acabado de reescrever.
+Observar as pastas resolve o caso comum; reler antes de gravar fecha a janela
+entre a escrita e o reload.
 
 R7 tem um efeito colateral que virou propriedade de segurança: como `column:` é
 validado contra as colunas existentes antes de compor qualquer caminho, um valor

@@ -369,6 +369,7 @@ func startWatcher(root string) chan struct{} {
 		// existir ainda, e a raiz já garante que mudanças sejam notadas.
 		_ = w.Add(dir)
 	}
+	watchCardDirs(w, root)
 
 	go func() {
 		defer w.Close()
@@ -381,6 +382,9 @@ func startWatcher(root string) chan struct{} {
 				if !ok {
 					return
 				}
+				// Uma pasta de card pode ter acabado de nascer — o card ganhou
+				// artefato. Sem adicioná-la, o que se escreve lá dentro não avisa.
+				watchCardDirs(w, root)
 				// Um save do editor gera vários eventos; espera a poeira baixar.
 				if timer == nil {
 					timer = time.NewTimer(watchDebounce)
@@ -406,6 +410,23 @@ func startWatcher(root string) chan struct{} {
 	}()
 
 	return out
+}
+
+// watchCardDirs observa cada cards/<id>/. O fsnotify não é recursivo, e card com
+// artefato mora numa pasta própria: sem isto, o agente reescrevia o card.md e o
+// deck nunca recarregava. Add é idempotente, então chamar a cada evento é barato.
+func watchCardDirs(w *fsnotify.Watcher, root string) {
+	entries, err := os.ReadDir(root + "/cards")
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			// Descartado de propósito: pasta que sumiu entre o ReadDir e o Add
+			// não tem o que observar.
+			_ = w.Add(root + "/cards/" + e.Name())
+		}
+	}
 }
 
 // watchCmd espera o próximo aviso do observador.

@@ -121,8 +121,7 @@ func (m Model) reviewPosted(msg reviewPostedMsg) (tea.Model, tea.Cmd) {
 	if where == "" {
 		where = card.GitHubPR
 	}
-	card.AppendLog("review publicado em %s", where)
-	if err := card.Save(); err != nil {
+	if err := card.Mutate(func(c *board.Card) { c.AppendLog("review publicado em %s", where) }); err != nil {
 		m.setStatus(false, "salvando card: %v", err)
 		return m, clearStatusCmd()
 	}

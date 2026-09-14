@@ -35,6 +35,44 @@ func TestWatcherNotifiesOnChange(t *testing.T) {
 	}
 }
 
+// TestWatcherSeesPromotedCard: card com artefato mora em cards/<id>/card.md, e
+// o fsnotify não é recursivo. Sem observar essas pastas, o agente reescrevia o
+// card, o deck não recarregava, e o save seguinte apagava a reescrita — visto
+// em campo. Vale para a pasta que já existia e para a criada depois.
+func TestWatcherSeesPromotedCard(t *testing.T) {
+	dir := t.TempDir()
+	root, _, _ := board.Init(dir)
+
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	antes := filepath.Join(root, "cards", "antes")
+	must(os.MkdirAll(antes, 0o755))
+	must(os.WriteFile(filepath.Join(antes, "card.md"), []byte("---\ncolumn: todo\n---\n"), 0o644))
+
+	events := startWatcher(root)
+	time.Sleep(50 * time.Millisecond)
+
+	must(os.WriteFile(filepath.Join(antes, "card.md"), []byte("---\ncolumn: todo\n---\n\nreescrito\n"), 0o644))
+	if !waitEvent(t, events, 2*time.Second) {
+		t.Fatal("editar card.md numa pasta que já existia deveria avisar o board")
+	}
+
+	depois := filepath.Join(root, "cards", "depois")
+	must(os.MkdirAll(depois, 0o755))
+	waitEvent(t, events, 2*time.Second) // a criação da pasta em si
+	time.Sleep(3 * watchDebounce)
+
+	must(os.WriteFile(filepath.Join(depois, "card.md"), []byte("---\ncolumn: todo\n---\n\nreescrito\n"), 0o644))
+	if !waitEvent(t, events, 2*time.Second) {
+		t.Fatal("editar card.md numa pasta criada depois do observador deveria avisar o board")
+	}
+}
+
 func TestWatcherSurvivesRepeatedEdits(t *testing.T) {
 	// Este é o teste que a versão antiga não passava: ela fechava e recriava o
 	// fsnotify a cada evento, deixando uma janela cega no meio.

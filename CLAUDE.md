@@ -61,7 +61,7 @@ falam com processos externos e não conhecem `board`.
 | onde | o que | versionado? |
 |---|---|---|
 | [`manual/adr/`](manual/adr/README.md) | **por que X e não Y**, o que falhou | sim |
-| [`manual/regras.md`](manual/regras.md) | 16 invariantes, cada uma com teste | sim |
+| [`manual/regras.md`](manual/regras.md) | 17 invariantes, cada uma com teste | sim |
 | [`manual/go-patterns.md`](manual/go-patterns.md) | padrões de Go com exemplos daqui | sim |
 | [`manual/security.md`](manual/security.md) | modelo de ameaça e mitigações | sim |
 | [`AGENTS.md`](AGENTS.md) | como trabalhar neste repo | sim |

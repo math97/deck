@@ -154,38 +154,7 @@ func loadCards(b *Board) error {
 			continue
 		}
 
-		id := doc.GetString("id")
-		if id == "" {
-			id = stem
-		}
-		title := doc.GetString("title")
-		if title == "" {
-			title = stem
-		}
-
-		card := &Card{
-			ID:          id,
-			Path:        cardPath,
-			Dir:         cardDir,
-			Title:       title,
-			Column:      doc.GetString("column"),
-			Order:       atoiOr(doc.GetString("order"), 0),
-			Created:     parseTimeOr(doc.GetString("created"), time.Time{}),
-			Updated:     parseTimeOr(doc.GetString("updated"), time.Time{}),
-			GitHubPR:    doc.GetString("github_pr"),
-			GitHubIssue: doc.GetString("github_issue"),
-			Body:        doc.Body,
-			doc:         doc,
-		}
-		if name := doc.GetString("agent_name"); name != "" {
-			card.Agent = &AgentRef{
-				Name:      name,
-				Pane:      doc.GetString("agent_pane"),
-				Kind:      doc.GetString("agent_kind"),
-				Workspace: doc.GetString("agent_workspace"),
-				Worktree:  doc.GetString("worktree_path"),
-			}
-		}
+		card := cardFromDoc(doc, cardPath, cardDir, stem)
 		if cardDir != "" {
 			loadArtifacts(b, card)
 		}
@@ -253,7 +222,78 @@ func reconcile(b *Board) {
 	}
 }
 
+// cardFromDoc monta o card a partir do documento lido. É o único parser de
+// card: o carregamento do board e o Refresh passam por aqui.
+func cardFromDoc(doc *Doc, cardPath, cardDir, stem string) *Card {
+	id := doc.GetString("id")
+	if id == "" {
+		id = stem
+	}
+	title := doc.GetString("title")
+	if title == "" {
+		title = stem
+	}
+
+	card := &Card{
+		ID:          id,
+		Path:        cardPath,
+		Dir:         cardDir,
+		Title:       title,
+		Column:      doc.GetString("column"),
+		Order:       atoiOr(doc.GetString("order"), 0),
+		Created:     parseTimeOr(doc.GetString("created"), time.Time{}),
+		Updated:     parseTimeOr(doc.GetString("updated"), time.Time{}),
+		GitHubPR:    doc.GetString("github_pr"),
+		GitHubIssue: doc.GetString("github_issue"),
+		Body:        doc.Body,
+		doc:         doc,
+	}
+	if name := doc.GetString("agent_name"); name != "" {
+		card.Agent = &AgentRef{
+			Name:      name,
+			Pane:      doc.GetString("agent_pane"),
+			Kind:      doc.GetString("agent_kind"),
+			Workspace: doc.GetString("agent_workspace"),
+			Worktree:  doc.GetString("worktree_path"),
+		}
+	}
+	return card
+}
+
+// Refresh relê o card do disco, descartando a cópia em memória. Os artefatos
+// ficam como estavam: moram em arquivos próprios, que o card.md não descreve.
+func (c *Card) Refresh() error {
+	raw, err := os.ReadFile(c.Path)
+	if err != nil {
+		return err
+	}
+	doc, err := ParseDoc(raw)
+	if err != nil {
+		return err
+	}
+	stem := strings.TrimSuffix(filepath.Base(c.Path), ".md")
+	if c.Dir != "" {
+		stem = filepath.Base(c.Dir)
+	}
+	fresh := cardFromDoc(doc, c.Path, c.Dir, stem)
+	fresh.Artifacts = c.Artifacts
+	*c = *fresh
+	return nil
+}
+
+// Mutate relê o card do disco, aplica a mudança e grava. É o jeito de alterar
+// um card que já existe: o agente, o editor e o usuário escrevem no card.md por
+// fora do deck, e gravar a cópia carregada apagaria isso (R17).
+func (c *Card) Mutate(change func(*Card)) error {
+	if err := c.Refresh(); err != nil {
+		return err
+	}
+	change(c)
+	return c.Save()
+}
+
 // Save grava um card no disco, sincronizando o frontmatter com a struct.
+// Para um card que já existe no disco, prefira Mutate.
 func (c *Card) Save() error {
 	if c.doc == nil {
 		c.doc = &Doc{}
