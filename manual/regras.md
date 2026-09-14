@@ -70,7 +70,7 @@ recarregar entre as teclas. Escrever a regra e testá-la foi o que revelou.
 | R11 | Dois cards nunca dividem branch: o branch sai do id do card, único por construção. | `TestRegraCadaCardTemBranchProprio` |
 | R12 | Um card tem no máximo um agente vivo. Com agente não-`done`, `s` recusa e manda usar `f`. | `TestStartAgentRefusedWhenAlreadyRunning` |
 | R13 | Um agente que sobe parado numa pergunta é do card mesmo assim; a tarefa espera ele liberar. | `TestAgenteBloqueadoNoStartFicaLigadoAoCard` |
-| R14 | `c` fecha o pane e remove a worktree **sem `--force`**: com trabalho não commitado o herdr recusa, e recusar é o certo. | `TestRegraNuncaPassaForce` |
+| R14 | `c` remove a worktree **sem `--force`**, e só então o pane sai: com trabalho não commitado o herdr recusa, e o `c` não fecha nada (`TestRecusaDaWorktreeMantemOAgenteNoCard`). | `TestRegraNuncaPassaForce` |
 
 ## O que limita a publicação
 
