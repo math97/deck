@@ -670,6 +670,34 @@ func TestSnapshotIgnoresUnchangedArtifact(t *testing.T) {
 	}
 }
 
+// TestCapturaNaoApagaCorpoReescritoPeloAgente: o prompt de refine manda o
+// agente reescrever o corpo do card. A captura vem logo depois e acrescenta ao
+// ## Log — a partir do disco, não da cópia em memória, senão a reescrita some.
+// Visto em campo com um card de refine no deck-cobaia.
+func TestCapturaNaoApagaCorpoReescritoPeloAgente(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "reescrito", "card-reescrito")
+
+	raw, err := os.ReadFile(card.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reescrito := strings.Replace(string(raw), "## Log", "corpo reescrito pelo agente\n\n## Log", 1)
+	if err := os.WriteFile(card.Path, []byte(reescrito), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m.captured(captureMsg{cardPath: card.Path, delivered: true, artifact: card.Path, size: 10})
+
+	raw, _ = os.ReadFile(card.Path)
+	if !strings.Contains(string(raw), "corpo reescrito pelo agente") {
+		t.Errorf("a captura apagou o que o agente escreveu no card:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "agente terminou") {
+		t.Errorf("a captura deveria ter registrado o fim no log:\n%s", raw)
+	}
+}
+
 func TestDetectFinishedFiresOnceOnDone(t *testing.T) {
 	m := newTestModel(t)
 	m, _ = cardWithAgent(t, m, "uma vez", "card-uma")
@@ -1628,6 +1656,9 @@ func TestWorktreeQueFicouVaiParaOLog(t *testing.T) {
 	m, card := cardWithAgent(t, m, "sobrou", "card-sobra")
 	card.Agent.Workspace = "w9"
 	card.Agent.Worktree = "/tmp/wt/deck-sobrou"
+	if err := card.Save(); err != nil { // o linkAgent grava isso no disco
+		t.Fatal(err)
+	}
 
 	m.Update(agentReleasedMsg{
 		cardPath:    card.Path,
@@ -1651,6 +1682,9 @@ func TestRecusaDaWorktreeMantemOAgenteNoCard(t *testing.T) {
 	m, card := cardWithAgent(t, m, "suja", "card-suja")
 	card.Agent.Workspace = "w9"
 	card.Agent.Worktree = "/tmp/wt/deck-suja"
+	if err := card.Save(); err != nil {
+		t.Fatal(err)
+	}
 
 	next, _ := m.Update(agentReleasedMsg{
 		cardPath: card.Path,

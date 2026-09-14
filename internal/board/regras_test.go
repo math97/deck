@@ -216,6 +216,35 @@ func TestRegraArtefatoLevaAKeyDaColuna(t *testing.T) {
 
 // R11: dois cards nunca dividem branch. O branch sai do id do card, que é o
 // nome do arquivo dele — único por construção, não por verificação.
+// R17: gravar um card parte do disco, não da cópia em memória. O agente, o
+// editor e o usuário escrevem no card.md por fora do deck; um save que
+// sobrescreve com o que estava carregado apaga isso em silêncio.
+func TestRegraGravarCardNaoApagaEdicaoExterna(t *testing.T) {
+	b := boardDeTeste(t)
+	card, _ := b.NewCard("tarefa", "todo")
+
+	raw, err := os.ReadFile(card.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	editado := strings.Replace(string(raw), "## Log", "escrito por fora do deck\n\n## Log", 1)
+	editado = strings.Replace(editado, "---\n", "---\nassignee: alguem\n", 1)
+	if err := os.WriteFile(card.Path, []byte(editado), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := b.MoveCard(card, "refine"); err != nil {
+		t.Fatalf("MoveCard: %v", err)
+	}
+
+	raw, _ = os.ReadFile(card.Path)
+	for _, want := range []string{"escrito por fora do deck", "assignee: alguem", "column: refine"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("depois de mover, o card deveria ter %q:\n%s", want, raw)
+		}
+	}
+}
+
 func TestRegraCadaCardTemBranchProprio(t *testing.T) {
 	b := boardDeTeste(t)
 	primeiro, _ := b.NewCard("mesma coisa", "todo")

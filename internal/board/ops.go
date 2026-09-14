@@ -43,10 +43,11 @@ func (b *Board) MoveCard(card *Card, toKey string) error {
 		fromTitle = from.Title
 	}
 
-	card.Column = toKey
-	card.Updated = time.Now()
-	card.AppendLog("%s → %s", fromTitle, to.Title)
-	return card.Save()
+	return card.Mutate(func(c *Card) {
+		c.Column = toKey
+		c.Updated = time.Now()
+		c.AppendLog("%s → %s", fromTitle, to.Title)
+	})
 }
 
 // ShiftCard reordena o card dentro da própria coluna. delta -1 sobe, +1 desce.
@@ -67,8 +68,8 @@ func (b *Board) ShiftCard(card *Card, delta int) error {
 
 	// Renumera a coluna inteira para manter a ordem estável no disco.
 	for i, c := range siblings {
-		c.Order = i
-		if err := c.Save(); err != nil {
+		order := i
+		if err := c.Mutate(func(c *Card) { c.Order = order }); err != nil {
 			return err
 		}
 	}

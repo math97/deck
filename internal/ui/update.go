@@ -186,8 +186,7 @@ func (m Model) commitInput(value string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		value = strings.TrimSpace(value)
-		card.GitHubPR = value
-		if err := card.Save(); err != nil {
+		if err := card.Mutate(func(c *board.Card) { c.GitHubPR = value }); err != nil {
 			m.setStatus(false, "%v", err)
 			return m, clearStatusCmd()
 		}
@@ -597,22 +596,24 @@ func (m *Model) linkAgent(card *board.Card, agent *herdr.Agent, kind, workspace,
 	if kind == "" {
 		kind = agent.Kind
 	}
-	card.Agent = &board.AgentRef{
-		Name:      agent.Name,
-		Pane:      agent.PaneID,
-		Kind:      kind,
-		Workspace: workspace,
-		Worktree:  worktree,
-	}
-	// O provedor entra no log: dias depois é a única forma de saber com quem o
-	// trabalho foi feito, sobretudo quando houve troca por cota.
-	if worktree != "" {
-		card.AppendLog("agente `%s` (%s) iniciado em %s, worktree %s",
-			agent.Name, kind, agent.PaneID, worktree)
-	} else {
-		card.AppendLog("agente `%s` (%s) iniciado em %s", agent.Name, kind, agent.PaneID)
-	}
-	if err := card.Save(); err != nil {
+	err := card.Mutate(func(c *board.Card) {
+		c.Agent = &board.AgentRef{
+			Name:      agent.Name,
+			Pane:      agent.PaneID,
+			Kind:      kind,
+			Workspace: workspace,
+			Worktree:  worktree,
+		}
+		// O provedor entra no log: dias depois é a única forma de saber com quem
+		// o trabalho foi feito, sobretudo quando houve troca por cota.
+		if worktree != "" {
+			c.AppendLog("agente `%s` (%s) iniciado em %s, worktree %s",
+				agent.Name, kind, agent.PaneID, worktree)
+		} else {
+			c.AppendLog("agente `%s` (%s) iniciado em %s", agent.Name, kind, agent.PaneID)
+		}
+	})
+	if err != nil {
 		m.setStatus(false, "salvando card: %v", err)
 		return
 	}
@@ -773,8 +774,8 @@ func (m Model) captured(msg captureMsg) (tea.Model, tea.Cmd) {
 		status = card.Title + ": agente terminou sem entrega"
 	}
 
-	card.AppendLog("%s", line)
-	if err := card.Save(); err != nil {
+	// Parte do disco: o agente pode ter acabado de reescrever o card.
+	if err := card.Mutate(func(c *board.Card) { c.AppendLog("%s", line) }); err != nil {
 		m.setStatus(false, "salvando card: %v", err)
 		return m, clearStatusCmd()
 	}
@@ -949,15 +950,17 @@ func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
 
 	for _, c := range m.b.Cards {
 		if c.Path == msg.cardPath {
-			// Desligar o agente apaga worktree_path do frontmatter; se a worktree
-			// não saiu, o log é o que resta para achá-la depois.
-			if msg.worktreeErr != nil && c.Agent != nil && c.Agent.Worktree != "" {
-				c.AppendLog("agente `%s` liberado, mas a worktree ficou em %s", msg.name, c.Agent.Worktree)
-			} else {
-				c.AppendLog("agente `%s` liberado", msg.name)
-			}
-			c.Agent = nil
-			if err := c.Save(); err != nil {
+			err := c.Mutate(func(c *board.Card) {
+				// Desligar o agente apaga worktree_path do frontmatter; se a
+				// worktree não saiu, o log é o que resta para achá-la depois.
+				if msg.worktreeErr != nil && c.Agent != nil && c.Agent.Worktree != "" {
+					c.AppendLog("agente `%s` liberado, mas a worktree ficou em %s", msg.name, c.Agent.Worktree)
+				} else {
+					c.AppendLog("agente `%s` liberado", msg.name)
+				}
+				c.Agent = nil
+			})
+			if err != nil {
 				m.setStatus(false, "salvando card: %v", err)
 				return m, clearStatusCmd()
 			}
