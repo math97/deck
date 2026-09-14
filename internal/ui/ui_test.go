@@ -693,6 +693,45 @@ func TestDetectFinishedFiresOnceOnDone(t *testing.T) {
 	}
 }
 
+// O herdr só reporta `done` quando a aba do agente não foi vista. Sem worktree
+// o agente sobe num pane ao lado do deck, na aba que o usuário está olhando, e
+// o fim chega como `idle`. Visto em campo: o card ficou mudo, sem log.
+func TestDetectFinishedFiresOnSeenIdle(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "visto", "card-visto")
+
+	m.agents = agentsMsg{"card-visto": herdr.Agent{Name: "card-visto", Status: herdr.StatusWorking}}
+	cmds := m.detectFinished(agentsMsg{
+		"card-visto": herdr.Agent{Name: "card-visto", Status: herdr.StatusIdle},
+	})
+	if len(cmds) != 1 {
+		t.Fatalf("working → idle é fim de rodada, esperava 1 captura, veio %d", len(cmds))
+	}
+
+	// idle → idle é o agente parado esperando; não recaptura.
+	m.agents = agentsMsg{"card-visto": herdr.Agent{Name: "card-visto", Status: herdr.StatusIdle}}
+	cmds = m.detectFinished(agentsMsg{
+		"card-visto": herdr.Agent{Name: "card-visto", Status: herdr.StatusIdle},
+	})
+	if len(cmds) != 0 {
+		t.Errorf("idle → idle não deveria capturar: %d", len(cmds))
+	}
+}
+
+// done → idle é o usuário abrindo a aba de um agente que já foi capturado.
+func TestDetectFinishedIgnoresDoneBecomingSeen(t *testing.T) {
+	m := newTestModel(t)
+	m, _ = cardWithAgent(t, m, "abriu a aba", "card-aba")
+
+	m.agents = agentsMsg{"card-aba": herdr.Agent{Name: "card-aba", Status: herdr.StatusDone}}
+	cmds := m.detectFinished(agentsMsg{
+		"card-aba": herdr.Agent{Name: "card-aba", Status: herdr.StatusIdle},
+	})
+	if len(cmds) != 0 {
+		t.Errorf("done → idle não é rodada nova, não deveria capturar: %d", len(cmds))
+	}
+}
+
 func TestDetectFinishedNotifiesOnBlocked(t *testing.T) {
 	m := newTestModel(t)
 	m, _ = cardWithAgent(t, m, "bloqueia", "card-bloq")
