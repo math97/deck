@@ -1620,6 +1620,53 @@ func TestTarefaRecusadaVoltaParaPendente(t *testing.T) {
 	}
 }
 
+// TestWorktreeQueFicouVaiParaOLog: liberar o agente apaga worktree_path do
+// frontmatter. Se a worktree não saiu, o caminho tem que sobreviver em algum
+// lugar, senão vira checkout órfão que ninguém sabe que existe.
+func TestWorktreeQueFicouVaiParaOLog(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "sobrou", "card-sobra")
+	card.Agent.Workspace = "w9"
+	card.Agent.Worktree = "/tmp/wt/deck-sobrou"
+
+	m.Update(agentReleasedMsg{
+		cardPath:    card.Path,
+		name:        "card-sobra",
+		worktreeErr: &herdr.Error{Op: "worktree", Code: "workspace_not_found", Message: "workspace w9 not found"},
+	})
+
+	data, err := os.ReadFile(card.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "/tmp/wt/deck-sobrou") {
+		t.Errorf("o log deveria guardar o caminho da worktree que ficou:\n%s", data)
+	}
+}
+
+// TestRecusaDaWorktreeMantemOAgenteNoCard: worktree suja recusa a remoção, e
+// nada foi fechado — o card segue apontando para o agente e para a worktree.
+func TestRecusaDaWorktreeMantemOAgenteNoCard(t *testing.T) {
+	m := newTestModel(t)
+	m, card := cardWithAgent(t, m, "suja", "card-suja")
+	card.Agent.Workspace = "w9"
+	card.Agent.Worktree = "/tmp/wt/deck-suja"
+
+	next, _ := m.Update(agentReleasedMsg{
+		cardPath: card.Path,
+		name:     "card-suja",
+		err:      &herdr.Error{Op: "worktree", Code: herdr.CodeDirtyWorktree, Message: "contains untracked files"},
+	})
+	m = next.(Model)
+
+	if card.Agent == nil || card.Agent.Worktree != "/tmp/wt/deck-suja" {
+		t.Error("recusa não deveria desligar o agente nem a worktree do card")
+	}
+	if m.statusOK || !strings.Contains(m.status, "nada foi fechado") {
+		t.Errorf("a barra deveria dizer que nada foi fechado, veio %q", m.status)
+	}
+}
+
 // TestTarefaPendenteMorreComOAgente: agente que sumiu não tem o que receber.
 func TestTarefaPendenteMorreComOAgente(t *testing.T) {
 	m := newTestModel(t)

@@ -908,19 +908,29 @@ func releaseAgent(card *board.Card, agent board.AgentRef) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
-		if err := herdr.PaneClose(ctx, agent.Pane); err != nil {
-			return agentReleasedMsg{cardPath: cardPath, name: agent.Name, err: err}
+		msg := agentReleasedMsg{cardPath: cardPath, name: agent.Name}
+
+		// Com worktree, ela sai primeiro. `worktree remove` fecha o workspace, e
+		// o pane do agente com ele. Na ordem inversa, fechar o único pane já
+		// derrubava o workspace e a remoção falhava com workspace_not_found,
+		// deixando a worktree órfã — visto em campo.
+		if agent.Workspace != "" {
+			err := herdr.WorktreeRemove(ctx, agent.Workspace)
+			if err == nil {
+				msg.worktree = agent.Worktree
+				return msg
+			}
+			// Sem --force: com trabalho não commitado o herdr recusa, e recusar é
+			// o certo. Nada foi fechado, então o card segue ligado ao agente.
+			if herdr.Code(err) == herdr.CodeDirtyWorktree {
+				msg.err = err
+				return msg
+			}
+			msg.worktreeErr = err
 		}
 
-		// A worktree sai depois do pane, e sem --force: com trabalho não
-		// commitado o herdr recusa, e recusar é o comportamento certo.
-		msg := agentReleasedMsg{cardPath: cardPath, name: agent.Name}
-		if agent.Workspace != "" {
-			if err := herdr.WorktreeRemove(ctx, agent.Workspace); err != nil {
-				msg.worktreeErr = err
-			} else {
-				msg.worktree = agent.Worktree
-			}
+		if err := herdr.PaneClose(ctx, agent.Pane); err != nil {
+			return agentReleasedMsg{cardPath: cardPath, name: agent.Name, err: err}
 		}
 		return msg
 	}
@@ -928,6 +938,10 @@ func releaseAgent(card *board.Card, agent board.AgentRef) tea.Cmd {
 
 // agentReleased limpa a ligação no card depois de fechar o pane.
 func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
+	if herdr.Code(msg.err) == herdr.CodeDirtyWorktree {
+		m.setStatus(false, "a worktree tem trabalho não commitado — nada foi fechado")
+		return m, clearStatusCmd()
+	}
 	if msg.err != nil {
 		m.setStatus(false, "%v", msg.err)
 		return m, clearStatusCmd()
@@ -935,8 +949,14 @@ func (m Model) agentReleased(msg agentReleasedMsg) (tea.Model, tea.Cmd) {
 
 	for _, c := range m.b.Cards {
 		if c.Path == msg.cardPath {
+			// Desligar o agente apaga worktree_path do frontmatter; se a worktree
+			// não saiu, o log é o que resta para achá-la depois.
+			if msg.worktreeErr != nil && c.Agent != nil && c.Agent.Worktree != "" {
+				c.AppendLog("agente `%s` liberado, mas a worktree ficou em %s", msg.name, c.Agent.Worktree)
+			} else {
+				c.AppendLog("agente `%s` liberado", msg.name)
+			}
 			c.Agent = nil
-			c.AppendLog("agente `%s` liberado", msg.name)
 			if err := c.Save(); err != nil {
 				m.setStatus(false, "salvando card: %v", err)
 				return m, clearStatusCmd()
